@@ -1,0 +1,668 @@
+\section{System Architecture}
+
+The system architecture defines a strict hierarchical topology, designed to physically emulate the CUDA execution model. Data flows from the high-level software abstraction on the host down to bit-level arithmetic operations in the distributed cores. The complete topological view is illustrated in Figure \ref{fig:full_architecture}.
+
+% ==========================================
+% TikZ Architecture Diagram
+% ==========================================
+\begin{figure*} % figure* 讓圖表橫跨兩欄
+    \centering
+    % 使用 resizebox 自動將圖縮放至頁面寬度 (\textwidth)
+    \resizebox{0.95\textwidth}{!}{%
+    
+    % --- 開始你的 TikZ 程式碼 ---
+    \begin{tikzpicture}[
+        node distance=1.5cm, 
+        % --- Styles ---
+        base_box/.style={
+            rectangle, draw, rounded corners=3pt, align=left, drop shadow,
+            font=\sffamily\footnotesize, inner sep=6pt
+        },
+        % Layer Containers
+        host_box/.style={base_box, draw=host_border, fill=host_bg, line width=1.5pt, align=center},
+        l1_cont/.style={draw=l1_border, fill=l1_bg, rounded corners=8pt, line width=1.5pt, inner sep=15pt, drop shadow},
+        l2_cont/.style={draw=l2_border, fill=l2_bg, rounded corners=8pt, line width=1.5pt, inner sep=10pt, drop shadow},
+        l3_cont/.style={draw=l3_border, fill=l3_bg, rounded corners=8pt, line width=1.5pt, inner sep=8pt, drop shadow},
+        % Internal Modules (White/Light boxes)
+        l1_node/.style={base_box, draw=l1_border, fill=l1_inner_bg, text width=6.0cm, line width=0.8pt},
+        l2_node/.style={base_box, draw=l2_border, fill=l2_inner_bg, text width=4.2cm, line width=0.8pt},
+        l3_node/.style={base_box, draw=l3_border, fill=l3_inner_bg, text width=3.2cm, line width=0.8pt},
+        fifo_node/.style={rectangle, draw=gray, fill=white, rounded corners=2pt, font=\scriptsize\bfseries, align=center, minimum width=2cm},
+        % Lines
+        bus_line/.style={draw=bus_color, line width=2pt, -latex},
+        thin_line/.style={draw=bus_color, line width=1pt, -latex},
+        % Style for the underbrace
+        warp_brace/.style={decorate, decoration={brace, amplitude=12pt, mirror}, line width=1.5pt, draw=warp_text}
+    ]
+
+    % =========================================================================
+    % LAYER 0: HOST SYSTEM
+    % =========================================================================
+    \node[host_box, minimum width=20cm] (host) {
+        \textbf{\large LAYER 0: HOST SYSTEM (PC - Python/PyTorch)}\\
+        (Kernel Compilation, Grid Tiling, Data Flattening to Linear Stream)
+    };
+
+    % =========================================================================
+    % LAYER 1: AMB82-Mini (Dual Logic)
+    % =========================================================================
+    \node[below=2.5cm of host] (l1_center_helper) {};
+
+    \node[l1_node, left=0.2cm of l1_center_helper] (l1_cpu) {
+        \textbf{[Main Thread / CPU]}\\
+        1. Parse USB CMD Packets\\
+        2. Manage VRAM Pointers\\
+        3. Trigger DMA Transfers
+    };
+    
+    \node[l1_node, right=0.2cm of l1_center_helper] (l1_dma) {
+        \textbf{[Hardware Engine / DMA]}\\
+        1. Drive 8080 Parallel Bus\\
+        2. VRAM $\to$ GPIO (Zero-Copy)\\
+        3. Gen. WR/CS Timing Signals
+    };
+
+    \begin{scope}[on background layer]
+        \node[l1_cont, fit=(l1_cpu)(l1_dma)] (l1_container) {};
+        \node[anchor=north west, text=l1_border, font=\bfseries] at (l1_container.north west) {LAYER 1: GPU MASTER \& TENSOR ENGINE [ AMB82-Mini ]};
+        \node[anchor=north west, text=l1_border, font=\footnotesize] at ($(l1_container.north west)+(0,-0.5)$) {(Single-core M33, utilizing DMA HW as a virtual 2nd Core)};
+    \end{scope}
+
+    \draw[bus_line] (host.south) -- node[midway, fill=white] {USB Serial / WiFi (Command Stream)} (l1_container.north);
+
+    % =========================================================================
+    % LAYER 2: ESP32-S3 (Dual Core Vertical)
+    % =========================================================================
+    \node[below=4.5cm of l1_container.south west, xshift=5cm] (sm0_center) {};
+
+    \node[l2_node] (sm0_core0) at (sm0_center) {
+        \textbf{CORE 0 (Receiver)}\\
+        \textit{[ Upstream IO ]}\\
+        1. Listen to GlobalBus\\
+        2. Drive Slave Interface (RX)\\
+        3. Write to L1 PSRAM
+    };
+    
+    \node[fifo_node, below=0.3cm of sm0_core0] (sm0_ring) {(RingBuf)};
+    
+    \node[l2_node, below=0.3cm of sm0_ring] (sm0_core1) {
+        \textbf{CORE 1 (Scheduler)}\\
+        \textit{[ Downstream IO ]}\\
+        1. Read L1 PSRAM\\
+        2. Warp Scheduler Logic\\
+        3. Drive Local Master (TX)
+    };
+
+    \begin{scope}[on background layer]
+        \node[l2_cont, fit=(sm0_core0)(sm0_ring)(sm0_core1)] (sm0_container) {};
+        \node[anchor=north west, text=l2_border, font=\bfseries] at (sm0_container.north west) {LAYER 2: SM 0 [ ESP32-S3 ]};
+    \end{scope}
+
+    \draw[thin_line] (sm0_core0) -- (sm0_ring);
+    \draw[thin_line] (sm0_ring) -- (sm0_core1);
+
+    % --- SM 1 & SM N (Collapsed) ---
+    \node[l2_cont, right=1.5cm of sm0_container, minimum height=8cm, text width=3cm, align=center, fill=l2_bg!60] (sm1_container) {
+        \textbf{LAYER 2: SM 1}\\(Collapsed View)
+    };
+    \node[l2_cont, right=1.0cm of sm1_container, minimum height=8cm, text width=3cm, align=center, fill=l2_bg!60] (smn_container) {
+        \textbf{LAYER 2: SM N}\\(Collapsed View)
+    };
+
+    % =========================================================================
+    % GLOBAL BUS (L1 -> L2)
+    % =========================================================================
+    \coordinate (gbus_y) at ($(l1_container.south)!0.4!(sm0_container.north)$);
+    
+    \draw[bus_line] (l1_cpu.south) |- (gbus_y) node[pos=0.7, above, font=\footnotesize] {Control (CMD)};
+    \draw[bus_line] (l1_dma.south) |- (gbus_y) node[pos=0.7, above, font=\footnotesize] {Data Stream (Weights)};
+    
+    \draw[line width=4pt, draw=bus_color] ($(gbus_y) + (-6,0)$) -- ($(gbus_y) + (10,0)$) 
+        node[right, align=left, font=\footnotesize] {
+            \textbf{GLOBAL G-BUS (8-bit Parallel)}\\
+            $\sim$50MB/s Memory Streaming\\
+            \texttt{[D0-D7 | WR | RD | DC | CS x]}
+        };
+    
+    \draw[bus_line] (gbus_y -| sm0_container.north) -- (sm0_container.north);
+    \draw[bus_line] (gbus_y -| sm1_container.north) -- (sm1_container.north);
+    \draw[bus_line] (gbus_y -| smn_container.north) -- (smn_container.north);
+
+    % =========================================================================
+    % LAYER 3: RP2040 (Dual Core Vertical)
+    % =========================================================================
+    
+    % Macro for drawing SMSP
+    \newcommand{\drawSMSP}[3]{
+        \node[l3_node] (#1_core0) at (#2) {
+            \textbf{CORE 0 (IO)}\\
+            1. PIO RX Manager\\
+            2. Fill FIFO\\
+            3. Sync Signals
+        };
+        \node[fifo_node, below=0.2cm of #1_core0] (#1_fifo) {[ FIFO ]};
+        \node[l3_node, below=0.2cm of #1_fifo] (#1_core1) {
+            \textbf{CORE 1 (ALU)}\\
+            1. F 1loating Point Ops\\
+            2. Activation Func\\
+            3. Matrix Mult.
+        };
+        
+        \begin{scope}[on background layer]
+            \node[l3_cont, fit=(#1_core0)(#1_fifo)(#1_core1)] (#1_cont) {};
+            \node[anchor=north west, text=l3_border, font=\bfseries\scriptsize] at (#1_cont.north west) {#3};
+        \end{scope}
+        
+        \draw[thin_line] (#1_core0) -- (#1_fifo);
+        \draw[thin_line] (#1_fifo) -- (#1_core1);
+    }
+
+    \coordinate (l3_start_y) at ($(sm0_container.south) + (0, -7.5cm)$);
+    
+    \drawSMSP{smsp0}{$(l3_start_y) + (-6.0, 0)$}{SMSP 0 [ RP2040 ]}
+    \drawSMSP{smsp1}{$(l3_start_y) + (-2.0, 0)$}{SMSP 1 [ RP2040 ]}
+    \drawSMSP{smsp2}{$(l3_start_y) + ( 2.0, 0)$}{SMSP 2 [ RP2040 ]}
+    \drawSMSP{smsp3}{$(l3_start_y) + ( 6.0, 0)$}{SMSP 3 [ RP2040 ]}
+
+    % =========================================================================
+    % LOCAL BUS (L2 -> L3)
+    % =========================================================================
+    \coordinate (lbus_y) at ($(sm0_container.south)!0.5!(smsp0_cont.north)$);
+    
+    \draw[bus_line] (sm0_container.south) -- (lbus_y -| sm0_container.south);
+    
+    \draw[line width=4pt, draw=bus_color] ($(lbus_y -| smsp0_cont.west) + (-0.5,0)$) -- ($(lbus_y -| smsp3_cont.east) + (0.5,0)$) 
+        node[below right, align=left, font=\footnotesize, xshift=-1cm, yshift=-0.2cm] {
+            \textbf{LOCAL G-BUS (8-bit Parallel)}\\
+            $\sim$40MB/s Instruction Broadcast\\
+            \texttt{[D0-D7 | WR | RD | DC | CS[0..3]]}
+        };
+    
+    \foreach \i in {0,1,2,3} {
+        \draw[bus_line] (lbus_y -| smsp\i_cont.north) -- (smsp\i_cont.north);
+    }
+
+    % =========================================================================
+    % Warp Brace
+    % =========================================================================
+    \coordinate (brace_start) at ($(smsp0_cont.south west) + (0, -0.3cm)$);
+    \coordinate (brace_end) at ($(smsp3_cont.south east) + (0, -0.3cm)$);
+
+    \draw[warp_brace] (brace_start) -- (brace_end)
+        node[midway, below=0.5cm, align=center, font=\sffamily, text=warp_text] {
+            \textbf{\large Logical "Warp" (32 Threads)}\\
+            (Synchronized via SYNC\_TRIG Signal)
+        };
+
+    \end{tikzpicture}
+    % --- 結束 TikZ 程式碼 ---
+SP32-S3 as Streamin    } % 結束 resizebox
+    \caption{Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads).}
+    \label{fig:full_architecture}
+\end{figure*}
+
+\subsection{Cluster Hierarchy}
+
+\subsubsection{Layer 0: Host System (Grid)}
+The host PC utilizes PyTorch to define the computational graph. It performs \textbf{Grid Tiling}, breaking large tensors into smaller chunks that fit the SRAM constraints of the microcontroller network. These tiles are flattened into a serial stream.
+
+\subsubsection{Layer 1: GPU Master (AMB82-Mini)}
+This layer acts as the centralized controller. It features an ARM Cortex-M33 core.
+\begin{itemize}
+    \item \textbf{DMA Engine:} The defining feature is the use of the DMA hardware as a "Virtual Second Core." It drives the 8080 parallel bus, generating Write (WR) and Chip Select (CS) signals automatically.
+\end{itemize}
+
+\subsubsection{Layer 2: Streaming Multiprocessors (ESP32-S3)}
+The ESP32-S3 mimics a CUDA SM. It utilizes its dual-core architecture to decouple reception from scheduling. Core 0 fills a Ring Buffer from the Global Bus, while Core 1 reads from this buffer to schedule instructions for the downstream threads.
+
+\subsubsection{Layer 3: SMSP / Threads (RP2040)}
+The RP2040 acts as the fundamental ALU. It uses its Programmable I/O (PIO) state machines to ingest instructions from the Local G-Bus, pushing them into a FIFO for executing.
+
+\subsection{ESP32-S3 Micro-Architecture (Node Detail)}
+
+While the global architecture describes the cluster data flow, the specific implementation of the "Micro-CUDA" VM on the ESP32-S3 node mimics a discrete GPU's internal structure. Figure \ref{fig:vm_arch} illustrates the internal dual-core topology corresponding to the system architecture described in the ISA guide.
+
+\begin{figure*}[htbp]
+    \centering
+    \resizebox{0.9\textwidth}{!}{%
+    \begin{tikzpicture}[
+        node distance=1.2cm,
+        box/.style={rectangle, draw=black, thick, rounded corners, align=center, font=\sffamily\small},
+        core_box/.style={rectangle, draw=black, line width=1pt, rounded corners, inner sep=10pt, align=center},
+        mem_box/.style={rectangle, draw=black, thick, fill=yellow!10, minimum width=3cm, minimum height=1cm, align=center},
+        queue_box/.style={rectangle, draw=purple, thick, dashed, fill=purple!5, minimum width=4cm, minimum height=0.8cm, align=center},
+        arrow/.style={->, >=stealth, thick}
+    ]
+
+    % --- Host Node ---
+    \node[box, fill=gray!20, minimum width=10cm] (host) {\textbf{HOST (Serial CLI)}\\Commands: \texttt{gpu\_reset}, \texttt{load\_imem}, \texttt{dma\_h2d}, \texttt{kernel\_launch}};
+
+    % --- Core 0 (Front-End) ---
+    \node[core_box, fill=blue!5, below=1.5cm of host, xshift=-4cm] (core0) {
+        \textbf{Core 0: Front-End (Warp Scheduler)} \\[0.2cm]
+        
+        \begin{tikzpicture}[node distance=0.8cm]
+            \node[box, fill=white] (cli) {[Serial Handler] $\to$ [CLI Parser]};
+            
+            \node[mem_box, below=0.5cm of cli] (imem) {
+                \textbf{Instruction Memory (IMEM)}\\
+                Size: 1024 Insts\\
+                \scriptsize \texttt{PC:0 MOV R1,5}
+            };
+            
+            \node[box, fill=white, below=0.5cm of imem] (fetch) {
+                \textbf{Fetch \& Decode Unit}\\
+                PC Control (BRA/BR.Z)\\
+                Decode Opcode/Operands
+            };
+            
+            \draw[arrow] (cli) -- (imem);
+            \draw[arrow] (imem) -- (fetch);
+        \end{tikzpicture}
+    };
+
+    % --- Core 1 (Back-End) ---
+    \node[core_box, fill=green!5, right=1.0cm of core0] (core1) {
+        \textbf{Core 1: Back-End (SIMD Engine)} \\[0.2cm]
+        
+        \begin{tikzpicture}[node distance=0.8cm]
+            \node[box, fill=white, minimum width=5cm] (simd) {
+                \textbf{8-Lane SIMD Execution Engine}\\
+                \scriptsize Lane 0 .. Lane 7 (R/F/P Registers)
+            };
+            
+            \node[mem_box, below=0.5cm of simd, fill=orange!10] (vram) {
+                \textbf{Shared Global Memory (VRAM)}\\
+                Size: 40KB - 1MB\\
+                Shared Address Space
+            };
+            
+            \node[box, fill=white, below=0.5cm of vram] (trace) {
+                \textbf{Execution Trace Logger}\\
+                Cycle-Accurate JSON Stream
+            };
+            
+            \draw[arrow] (simd) -- (vram);
+            \draw[arrow] (vram) -- (trace);
+        \end{tikzpicture}
+    };
+
+    % --- Interconnects ---
+    \draw[arrow, line width=1.5pt] (host) -- node[midway, fill=white] {UART (115200/Turbo)} (core0.north);
+    
+    % FreeRTOS Queue
+    \node[queue_box, below right=0.5cm and -1cm of core0.east] (queue) {\textbf{FreeRTOS Queue}\\(Instruction Batch)};
+    
+    \draw[arrow, thick, blue] (core0.east) |- (queue.west);
+    \draw[arrow, thick, blue] (queue.east) -| (core1.north);
+
+    \end{tikzpicture}
+    }
+    \caption{ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM.}
+    \label{fig:vm_arch}
+\end{figure*}
+
+\begin{enumerate}
+    \item \textbf{Core 0 (Warp Scheduler)}: Fetches instructions, handles PC control (Branching), and queues batches for execution.
+    \item \textbf{Core 1 (SIMD Engine)}: Conceptually executes parallel lanes. Core 1 maintains 8 independent register contexts (Micro-CUDA VM mode) or drives external ALUs.
+\end{enumerate}
+
+This dual-core split allows the "SM" to maintain high throughput by overlapping instruction fetch/decode (Core 0) with mathematical execution (Core 1).
+
+\subsection{Scalability and Multi-Chip Integration}
+To scale beyond a single node, the architecture supports a hierarchical cluster topology.
+
+\subsubsection{Inter-Node Communication}
+Multiple ESP32-S3 nodes (Layer 2) are connected via a high-speed SPI bus (50 MHz) to a central master (FPGA or Gateway). This allows the host to broadcast kernels to the entire cluster or address specific nodes for task parallelism.
+
+\subsubsection{Global Synchronization}
+To support multi-chip kernels (e.g., distributed matrix multiplication), a dedicated open-drain GPIO line acts as a wired-AND "Global Barrier". When a kernel reaches a global sync point, it pulls the line low. The line only returns high when all nodes have released it, ensuring $<1\mu s$ synchronization latency across the cluster.
+
+\subsection{Layer 1 Detail: AMB82-Mini (Master Controller)}
+The AMB82-Mini serves as the high-level scheduler, implementing an Asymmetric Multi-Processing (AMP) model to manage the flow of data from the host to the distributed compute nodes.
+
+\begin{figure*}[htbp]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily,
+    % 樣式定義
+    component/.style={
+        draw, fill=white, rounded corners, align=center, drop shadow, font=\footnotesize
+    },
+    scheduler_block/.style={
+        draw=blue!80!black, top color=blue!5, bottom color=blue!10, 
+        rounded corners, align=center, drop shadow, font=\bfseries
+    },
+    memory_container/.style={
+        draw=orange!60!black, fill=orange!5, dashed, rounded corners, inner sep=15pt,
+        label={[orange!80!black, font=\bfseries]north:External Memory (DDR2 128MB)}
+    },
+    buffer_block/.style={
+        draw=orange!80!black, fill=white, rectangle split, rectangle split parts=2, 
+        align=center, drop shadow, font=\footnotesize
+    },
+    queue_block/.style={
+        draw=red!60!black, fill=red!5, rectangle split, rectangle split parts=2,
+        align=center, drop shadow, font=\footnotesize, minimum width=3.5cm
+    },
+    dma_block/.style={
+        draw=black, fill=gray!20, thick, align=center, drop shadow
+    },
+    bus/.style={
+        draw=darkgray, line width=4pt
+    },
+    bus_arrow/.style={
+        ->, >=Stealth, thick, color=darkgray, line width=1.5pt
+    },
+    control_flow/.style={
+        ->, >=Stealth, dashed, blue!70!black, thick
+    },
+    data_flow/.style={
+        ->, >=Stealth, thick, orange!70!black
+    }
+]
+
+    % --- 1. TOP INTERFACE (Host Input) ---
+    \node[component, fill=yellow!10, text width=5cm] (host_io) at (0, 0) {
+        \textbf{USB / WiFi Input Stream}\\
+        (Packet Receiver)
+    };
+
+    % --- 2. DDR2 MEMORY BLOCK (Right Side) ---
+    % Increased spacing from 2cm to 3.5cm to prevent overlap
+    \node[buffer_block, right=3.5cm of host_io, yshift=-1cm] (ddr_buffers) {
+        \textbf{CMD Buffer}
+        \nodepart{second} 64--128 Entries\\
+        \textit{(Raw Packets)}
+    };
+    
+    \node[buffer_block, below=0.5cm of ddr_buffers] (meta_buffers) {
+        \textbf{Metadata Buffer}
+        \nodepart{second} 64--128 Entries\\
+        \textit{(Shape, Precision, Cluster ID)}
+    };
+
+    \begin{scope}[on background layer]
+        % Removed explicit label to avoid duplication with style definition
+        \node[memory_container, fit=(ddr_buffers) (meta_buffers)] (ddr_frame) {};
+    \end{scope}
+
+    % Connect Host to DDR
+    \draw[data_flow] (host_io.east) -| (ddr_frame.north) node[pos=0.3, above] {Store Packets};
+
+    % --- 3. AMP SCHEDULER (Center) ---
+    \node[scheduler_block, below=1.5cm of host_io, text width=4.5cm, minimum height=2cm] (scheduler) {
+        \textbf{Scheduling Unit}\\
+        \textit{(AMP-like Logic / RTOS Task)}\\
+        \vspace{0.2cm}
+        \footnotesize
+        1. Fetch Metadata\\
+        2. Assign Priority\\
+        3. Push to Context Queue
+    };
+
+    % Interaction: Scheduler reads DDR
+    \draw[control_flow, <->] (scheduler.east) -- node[midway, fill=white, font=\tiny, align=center] {Read Meta /\\Manage Pointers} (meta_buffers.west);
+
+    % --- 4. QUEUING SYSTEM (Below Scheduler) ---
+    
+    % Context Queue
+    \node[queue_block, below=1cm of scheduler] (ctx_queue) {
+        \textbf{Context Queue (Task Context)}
+        \nodepart{second} 8--16 Slots\\
+        \textit{(Serialization \& Priority)}
+    };
+
+    % DMA Request Queue
+    \node[queue_block, below=0.8cm of ctx_queue] (dma_queue) {
+        \textbf{DMA Request Queue}
+        \nodepart{second} 16--32 Entries\\
+        \textit{(Parallel DMA Scheduling)}
+    };
+
+    % Flow: Scheduler -> Ctx -> DMA
+    \draw[control_flow] (scheduler.south) -- (ctx_queue.north);
+    \draw[control_flow] (ctx_queue.south) -- (dma_queue.north);
+
+    % --- 5. EXECUTION ENGINE (Bottom) ---
+    
+    % DMA Engine
+    % Align clearly to the right
+    \node[dma_block, right=2.0cm of dma_queue, text width=2.5cm] (dma_engine) {
+        \textbf{DMA Engine}\\
+        \textit{(Hardware)}
+    };
+
+    % Data Burst Unit
+    \node[component, below=1cm of dma_engine, text width=4cm, fill=green!10, draw=green!50!black, thick] (burst_unit) {
+        \textbf{Data Burst Unit}\\
+        Max Payload: 512 Bytes/burst\\
+        \textit{(500MHz CPU Optimized)}
+    };
+
+    % Connecting Memory Data to Output via DMA
+    % Rerouted to enter from NORTH for cleaner vertical flow
+    \draw[data_flow] (ddr_frame.south) |- (dma_engine.east) node[near end, right, xshift=2pt] {Bulk Data Fetch};
+    \draw[control_flow] (dma_queue.east) -- (dma_engine.west) node[midway, above, font=\tiny, yshift=2pt] {Trigger};
+    \draw[data_flow] (dma_engine.south) -- (burst_unit.north);
+
+    % --- 6. LAYER FRAME ---
+    \node[draw=blue!60!black, thick, rounded corners, fit=(host_io) (scheduler) (burst_unit) (dma_queue), label={[blue!80!black, font=\large\bfseries]north west:LAYER 1: AMB82-Mini (Master Controller)}] (layer1_frame) {};
+
+    % --- 7. GLOBAL BUS INTERFACE ---
+    \draw[bus] ($(layer1_frame.south west) + (-1, -1)$) -- ($(layer1_frame.south east) + (4, -1)$) node[right, align=left, font=\footnotesize] {
+        \textbf{GLOBAL G-BUS}\\
+        To Layer 2 (ESP32-S3 Arrays)
+    };
+
+    \draw[bus_arrow] (burst_unit.south) -- (burst_unit.south |- layer1_frame.south |- 0, -8.3);
+
+\end{tikzpicture}
+}
+\caption{Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.}
+\label{fig:layer1_arch}
+\end{figure*}
+
+\subsection{Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor}
+The ESP32-S3 functions as the critical Layer 2 \textit{Streaming Multiprocessor (SM)}, bridging the high-bandwidth Global Bus and the localized execution threads. Its detailed internal architecture is shown in Figure \ref{fig:layer2_arch}.
+
+\begin{figure*}[htbp]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily,
+    % 樣式定義
+    component/.style={
+        draw, fill=white, rounded corners, align=center, drop shadow, font=\footnotesize
+    },
+    core_block/.style={
+        draw=gray, dashed, fill=gray!5, rounded corners, inner sep=10pt
+    },
+    memory_block/.style={
+        draw=blue!50!black, top color=blue!5, bottom color=blue!10, 
+        shading angle=45, rounded corners, align=center, drop shadow, font=\footnotesize\bfseries
+    },
+    queue_block/.style={
+        draw=red!50!black, top color=red!5, bottom color=red!10, 
+        rectangle split, rectangle split parts=3, align=center, drop shadow, font=\small
+    },
+    bus/.style={
+        draw=darkgray, line width=4pt
+    },
+    bus_arrow/.style={
+        ->, >=Stealth, thick, color=darkgray, line width=1.5pt
+    },
+    data_flow/.style={
+        ->, >=Stealth, thick, blue!60!black
+    },
+    control_flow/.style={
+        ->, >=Stealth, dashed, red!60!black
+    }
+]
+
+    % --- 1. GLOBAL BUS (Top) ---
+    \node (bus_label) at (0, 0) [above, font=\bfseries] {GLOBAL G-BUS (8-bit Parallel)};
+    \draw[bus] (-5, 0) -- (6, 0);
+    
+    % Sideband visually separated
+    \draw[bus, color=orange!70!black, line width=2pt] (-5, 0.2) -- (6, 0.2);
+    \node at (4.5, 0.4) [font=\tiny\bfseries, text=orange!70!black] {Metadata Sideband (MD0-MD3)};
+
+    % --- 2. ESP32-S3 SM 0 CONTAINER ---
+    
+    % --- CORE 0 AREA (Receiver) ---
+    \node[component, text width=3.5cm] (rx_unit) at (0, -2) {
+        \textbf{CORE 0 (Receiver)}\\
+        \textit{Slave Interface}\\
+        Listen \& Filter
+    };
+
+    % Metadata Cache (Sideband Processing)
+    \node[memory_block, left=0.5cm of rx_unit, text width=2.5cm, fill=orange!10] (meta_cache) {
+        \textbf{Metadata Cache}\\
+        64 Entries $\times$ 32B\\
+        \textit{(Pre-Schedule)}
+    };
+
+    % Connections from Bus
+    \draw[bus_arrow, orange!70!black] (-2.5, 0.2) -- node[left, font=\tiny] {MD0-MD3} (meta_cache.north);
+    \draw[bus_arrow] (0, 0) -- node[right, font=\tiny] {Data Stream} (rx_unit.north);
+    \draw[control_flow] (meta_cache) -- (rx_unit);
+
+    % --- MEMORY & BUFFERS (Middle Layer) ---
+    
+    % L1 PSRAM (Big Shared Pool)
+    \node[memory_block, right=1cm of rx_unit, text width=3cm, minimum height=3cm, anchor=north west, yshift=0.5cm] (psram) {
+        \textbf{L1 PSRAM}\\
+        \textbf{Working Set}\\
+        \textit{256 KB}\\
+        (Hot Data / Tiles)
+    };
+
+    % Ring Buffer (Task Queue)
+    \node[queue_block, below=0.8cm of rx_unit, text width=3cm] (ring_buf) {
+        \textbf{Ring Buffer}\\
+        (Task Input Queue)
+        \nodepart{second} 32--64 Entries
+        \nodepart{third} FIFO Logic
+    };
+
+    % Data write flow
+    \draw[data_flow] (rx_unit.east) -- ++(0.5,0) |- (psram.west);
+    \draw[control_flow] (rx_unit.south) -- (ring_buf.north);
+
+    % --- CORE 1 AREA (Scheduler) ---
+    
+    % Reorder Queue
+    \node[queue_block, below=1cm of ring_buf, text width=3.5cm] (reorder_q) {
+        \textbf{Reorder Queue}\\
+        (SER-like Logic)
+        \nodepart{second} 16--32 Entries
+        \nodepart{third} Grouping \& Latency Hiding
+    };
+
+    % Core 1 Logic
+    \node[component, right=0.5cm of reorder_q, text width=3cm] (core1_logic) {
+        \textbf{CORE 1 (Scheduler)}\\
+        Warp Logic Processing
+    };
+
+    % Dispatch Window
+    \node[component, below=0.8cm of reorder_q, text width=3.5cm, fill=yellow!10] (dispatch) {
+        \textbf{Dispatch Window}\\
+        8--16 Entries\\
+        (Ready for TX)
+    };
+
+    % Burst Unit
+    \node[component, below=0.5cm of dispatch, text width=4cm, draw=black, thick] (burst_unit) {
+        \textbf{Local Burst Unit}\\
+        128--256 Bytes Packetizer
+    };
+
+    % Core 1 Flows
+    \draw[control_flow] (ring_buf.south) -- (reorder_q.north);
+    \draw[data_flow] (psram.south) |- (core1_logic.north);
+    \draw[control_flow] (reorder_q.east) -- (core1_logic.west);
+    \draw[control_flow] (core1_logic.south) |- (dispatch.east);
+    \draw[data_flow] (dispatch.south) -- (burst_unit.north);
+
+    % --- FRAME FOR SM 0 ---
+    \node[draw=green!40!black, thick, rounded corners, fit=(rx_unit) (meta_cache) (psram) (burst_unit), label={[green!40!black, font=\large\bfseries]north:LAYER 2: SM 0 [ ESP32-S3 ]}] (sm0_frame) {};
+
+    % --- NEIGHBOR SMs (Collapsed) ---
+    \node[component, right=1cm of sm0_frame, minimum height=8cm, text width=2cm, fill=gray!10] (sm1) {
+        \textbf{SM 1}\\
+        (Collapsed)
+    };
+    \node[component, right=0.2cm of sm1, minimum height=8cm, text width=2cm, fill=gray!10] (smn) {
+        \textbf{SM N}\\
+        (Collapsed)
+    };
+    
+    % Bus connections for neighbors
+    \draw[bus_arrow] (sm1.north |- 0,0) -- (sm1.north);
+    \draw[bus_arrow] (smn.north |- 0,0) -- (smn.north);
+
+    % --- 3. LOCAL BUS (Bottom) ---
+    \coordinate (local_bus_y) at ($(burst_unit.south) + (0,-0.8)$);
+    \draw[bus] (-5, -9.8) -- (6, -9.8);
+    \node at (0, -10.1) [font=\bfseries] {LOCAL G-BUS (Instruction Broadcast)};
+
+    % Output connection
+    \draw[bus_arrow] (burst_unit.south) -- (0, -9.8);
+    \draw[bus_arrow] (sm1.south) -- (sm1.south |- 0, -9.8);
+    \draw[bus_arrow] (smn.south) -- (smn.south |- 0, -9.8);
+
+\end{tikzpicture}
+}
+\caption{Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.}
+\label{fig:layer2_arch}
+\end{figure*}
+
+The architecture adopts a heterogeneous dual-core strategy:
+\begin{itemize}
+    \item \textbf{Core 0 (Receiver)}: Dedicated to high-throughput I/O. It filters incoming packets from the Global Bus based on metadata sidebands (MD0-MD3), placing valid tasks into a FIFO Ring Buffer.
+    \item \textbf{Core 1 (Scheduler)}: Implements complex warp scheduling logic. It pulls tasks from the buffer, reorders them to hide memory latency (via Reorder Queue), and dispatches instruction packets to the localized worker threads via the Local G-Bus.
+\end{itemize}
+
+\subsection{Hardware Specifications}
+
+\subsubsection{AMB82-Mini (GPU Grid Master)}
+The AMB82-Mini serves as the cluster controller and edge computing node, providing the necessary computational power for coordination and AI acceleration.
+\begin{itemize}
+    \item \textbf{MCU}: ARMv8-M (Cortex-M33), up to 500MHz. Optimized for high-speed control and coordination tasks within the cluster.
+    \item \textbf{NPU}: Intelligent Engine (0.4 TOPS). Supports efficient AI inference and accelerates edge neural networks.
+    \item \textbf{Memory}: Built-in DDR2 128MB + External 16MB SPI Nor Flash. Utilized as the primary buffer for the GPU Grid and for firmware storage.
+    \item \textbf{Peripherals Overview}:
+    \begin{itemize}
+        \item \textbf{GPIO}: Up to 23 pins.
+        \item \textbf{PWM}: 8 channels.
+        \item \textbf{UART}: 3 interfaces.
+        \item \textbf{SPI}: 2 interfaces.
+        \item \textbf{I2C}: 1 interface.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Comparison: RP2040 vs. ESP32}
+Table \ref{tab:chip_comparison} provides a detailed comparison between the execution units (RP2040) and the streaming multiprocessors (ESP32) used in the architecture.
+
+\begin{table}[htbp]
+\centering
+\caption{Hardware Feature Comparison: RP2040 vs. ESP32}
+\label{tab:chip_comparison}
+\resizebox{0.95\columnwidth}{!}{%
+\begin{tabular}{|l|p{4cm}|p{4cm}|}
+\hline
+\textbf{Feature} & \textbf{RP2040} & \textbf{ESP32} \\ \hline
+\textbf{CPU} & Dual-core Cortex-M0+ @ 133MHz & Xtensa Dual/Single-core 32-bit LX6, up to 240MHz \\ \hline
+\textbf{SRAM / ROM} & 264 KB, Independent Banks & 320 KB RAM, 448 KB ROM \\ \hline
+\textbf{Flash Memory} & External QSPI Flash (Max 16 MB) & Supports SD/SDIO/MMC/EMMC Host, Built-in Flash varies by board \\ \hline
+\textbf{DMA Controller} & Yes & Yes \\ \hline
+\textbf{Interconnect} & Fully Connected AHB & Dedicated DMA Channels \\ \hline
+\textbf{GPIO} & 30 total, 4 Analog Inputs & 34 Programmable GPIOs \\ \hline
+\textbf{Internal Flash} & 2 MB (Typical external) & 4 MB (Typical) \\ \hline
+\end{tabular}%
+}
+\end{table}

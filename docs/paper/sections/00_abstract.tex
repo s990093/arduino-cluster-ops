@@ -1,0 +1,7 @@
+\begin{abstract}
+The proliferation of AIoT devices has created a demand for parallel computing capabilities on resource-constrained microcontrollers. However, standard MCUs lack the Single Instruction Multiple Thread (SIMT) architecture found in GPUs, limiting their efficiency in data-parallel tasks like Transformer attention mechanisms. This paper presents \textit{Micro-CUDA}, a software-defined GPU architecture implemented on the ESP32 dual-core SoC. By dedicating Core 0 to instruction scheduling (Front-End) and Core 1 to an 8-lane SIMD execution engine (Back-End), we achieve a functional SIMT pipeline with independent register files and predicated execution. We introduce Micro-CUDA ISA v1.5, which features lane-aware memory operations, enabling true data parallelism. A case study on parallel Self-Attention computation demonstrates the architecture's ability to execute GPU-like kernels, effectively bridging the gap between MCU and GPU programming models for educational and edge-computing applications.
+\end{abstract}
+
+\begin{IEEEkeywords}
+ESP32, GPGPU, SIMT, Soft-GPU, Edge AI, CUDA
+\end{IEEEkeywords}

@@ -1,0 +1,94 @@
+\section{Application Binary Interface (ABI)}
+
+To ensure interoperability between the Micro-CUDA assembler, linker, and runtime, a strict Application Binary Interface (ABI) is defined.
+
+\subsection{Register Usage Convention}
+The architecture exposes 32 general-purpose registers (r0-r31) plus special function registers. Table \ref{tab:reg_convention} defines the usage standard.
+
+\begin{table}[h]
+\centering
+\caption{Micro-CUDA Register Convention}
+\label{tab:reg_convention}
+\resizebox{0.95\columnwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Register} & \textbf{Role} & \textbf{Preservation} \\ \hline
+r0 -- r3 & Function Arguments / Return Values & Caller Saved \\ \hline
+r4 -- r11 & Temporary Variables & Caller Saved \\ \hline
+r12 -- r27 & Saved Variables & Callee Saved \\ \hline
+r28 (SP) & Stack Pointer & Callee Saved \\ \hline
+r29 (LR) & Link Register & Callee Saved \\ \hline
+r30 & Reserved (Frame Pointer) & - \\ \hline
+r31 & Program Counter (PC) & - \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Stack Frame Layout}
+When a kernel invokes a device function (via \texttt{CALL}), a stack frame is allocated in the local SRAM (VRAM) of the SMSP.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.7\columnwidth}{!}{%
+\begin{tikzpicture}[
+    font=\ttfamily\scriptsize,
+    box/.style={draw, minimum width=4cm, minimum height=0.6cm, fill=white},
+    graybox/.style={box, fill=gray!20}
+]
+    \node (top) {};
+    
+    \node[graybox, below=0cm of top] (args) {Incoming Arguments};
+    \node[graybox, below=0cm of args] (ret) {Return Address (LR)};
+    \node[box, below=0cm of ret] (saved) {Saved Regs (r12-r27)};
+    \node[box, below=0cm of saved] (locals) {Local Variables};
+    \node[graybox, below=0cm of locals] (sp) {Current SP $\rightarrow$};
+    
+    \draw[->] (sp.east) -- ++(1,0) node[right] {Grows Down};
+    
+    \node[right=0.2cm of args, font=\sffamily\tiny] {High Addr};
+    \node[right=0.2cm of sp, font=\sffamily\tiny] {Low Addr};
+
+\end{tikzpicture}
+}
+\caption{Activation Record (Stack Frame) Structure. The stack grows downwards in the private SRAM memory space of each core.}
+\label{fig:stack_frame}
+\end{figure}
+
+\subsection{Exception Handling Model}
+The hardware implements a "Trap-and-Halt" mechanism for critical errors.
+
+\begin{itemize}
+    \item \textbf{Illegal Opcode}: Triggers \texttt{TRAP\_ILL} (0xDEAD0001). The pipeline flushes and asserting the \texttt{FAULT} signal on the Local G-BUS.
+    \item \textbf{Memory Access Violation}: Out-of-bounds Load/Store triggers \texttt{TRAP\_MEM} (0xDEAD0002).
+    \item \textbf{Divide-by-Zero}: Result clamps to maximum value (0xFFFFFFFF) and sets the \texttt{OVF} flag, continuing execution without a trap.
+\end{itemize}
+
+\subsection{Memory Organization}
+The Micro-CUDA architecture employs a modified Harvard architecture with separate instruction and data paths at the core level, but unified addressing for system resources.
+
+\begin{table}[h]
+\centering
+\caption{System Address Map}
+\label{tab:memory_map}
+\resizebox{0.95\columnwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Address Range} & \textbf{Region} & \textbf{Description} \\ \hline
+\texttt{0x0000\_0000} - \texttt{0x0003\_FFFF} & I-Cache & Instruction Cache (Mapped to Flash) \\ \hline
+\texttt{0x1000\_0000} - \texttt{0x1000\_FFFF} & VRAM (Local) & Private SRAM for current SMSP \\ \hline
+\texttt{0x2000\_0000} - \texttt{0x2FFF\_FFFF} & VRAM (Global) & Global DDR / PSRAM Window \\ \hline
+\texttt{0x4000\_0000} - \texttt{0x4000\_00FF} & SFR (DMA) & DMA Controller Registers \\ \hline
+\texttt{0x5000\_0000} - \texttt{0x5000\_00FF} & SFR (Tensor) & Tensor Engine Command Queue \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Special Function Registers (SFR)}
+The SFR region controls hardware accelerators and peripherals.
+
+\begin{itemize}
+    \item \textbf{DMA\_CTRL (0x4000\_0000)}: Write 1 to trigger transfer.
+    \item \textbf{DMA\_SRC (0x4000\_0004)}: Source Address.
+    \item \textbf{DMA\_DST (0x4000\_0008)}: Destination Address.
+    \item \textbf{TE\_CMD (0x5000\_0000)}: Tensor Engine Command Packet.
+\end{itemize}

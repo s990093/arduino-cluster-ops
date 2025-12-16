@@ -1,0 +1,515 @@
+\section{Micro-CUDA ISA Specification}
+\label{sec:isa}
+
+\textbf{Status:} Release Candidate | \textbf{Architecture:} Micro-Cluster (MC) | \textbf{Target:} Deep Learning / Transformer
+
+\subsection{Execution Model \& Architecture Definition}
+
+\subsubsection{Hardware Layer Mapping (Physical Mapping)}
+
+The system implements a three-layer distributed architecture:
+
+\begin{itemize}
+    \item \textbf{Layer 1 (Grid Master): AMB82-Mini}
+    \begin{itemize}
+        \item \textit{Role:} Grid Tiling and DMA Data Injection
+        \item \textit{Task:} Responsible for overall grid-level data distribution and kernel launch management
+    \end{itemize}
+    
+    \item \textbf{Layer 2 (SM / Scheduler): ESP32-S3}
+    \begin{itemize}
+        \item \textit{Role:} Warp Scheduler / Instruction Dispatcher
+        \item \textit{Task:} Handles warp scheduling and instruction broadcast
+    \end{itemize}
+    
+    \item \textbf{Layer 3 (Lane / Core): RP2040}
+    \begin{itemize}
+        \item \textit{Role:} Arithmetic Execution Lane
+        \item \textit{Task:} Receives instructions via PIO and executes arithmetic operations
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Data Types}
+
+To enable efficient AI inference on the FPU-less RP2040, v2.0 introduces \textbf{Packed BF16}.
+
+\begin{table}[htbp]
+\caption{Supported Data Types}
+\begin{center}
+\begin{tabular}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Type} & \textbf{Bit Width} & \textbf{Format} & \textbf{Description} \\
+\hline
+INT32 & 32-bit & 2's Complement & Address calculation, loop counters, indexing \\
+FP32 & 32-bit & IEEE 754 & [v1.5] High-precision weights, accumulators \\
+BF16 & 16-bit & 1-8-7 (BFloat16) & \textbf{[v2.0]} Same exponent bits as FP32, easy software emulation \\
+Packed BF16 & 32-bit & 2× BF16 & \textbf{[v2.0]} High: Element 1, Low: Element 0 \\
+INT8 & 8-bit & Signed & [v1.5] Used for \texttt{HMMA.I8} quantized operations \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Register File}
+
+Each Lane (RP2040) independently maintains its own register file:
+
+\begin{itemize}
+    \item \textbf{R0 - R31 (General Purpose):} 32× 32-bit registers
+    \begin{itemize}
+        \item \textit{Compatibility:} Can store INT32, FP32
+        \item \textit{Extension:} v2.0 supports \textbf{Packed BF16}
+    \end{itemize}
+    \item \textbf{P0 - P7 (Predicate):} 8× 1-bit condition flags
+    \item \textbf{SR (System Registers):} Read-only status (e.g., \texttt{SR\_LANEID})
+\end{itemize}
+
+\subsubsection{Single-Lane Architecture Overview}
+
+Figure \ref{fig:rp2040_simt_arch} illustrates the complete microarchitecture of a single RP2040 lane, showing the data flow from instruction fetch through execution to memory access.
+
+\begin{figure*}[htbp]
+\centering
+\begin{tikzpicture}[node distance=0.8cm]
+
+% Define professional color scheme (NVIDIA / Academic Style)
+\definecolor{coreFill}{RGB}{250, 250, 250}
+\definecolor{blockFill}{RGB}{255, 255, 255}
+\definecolor{lineColor}{RGB}{50, 60, 70}
+\definecolor{headerText}{RGB}{0, 0, 0}
+\definecolor{subText}{RGB}{80, 80, 80}
+\definecolor{accentGreen}{RGB}{118, 185, 0}
+\definecolor{groupBg}{RGB}{242, 245, 248}
+\definecolor{borderColor}{RGB}{180, 190, 200}
+
+% Style definitions
+\tikzset{
+    base/.style={
+        rectangle, draw=borderColor, line width=0.8pt, font=\sffamily, align=center
+    },
+    module/.style={
+        base, fill=blockFill, rounded corners=1pt, text width=8.5cm,
+        inner sep=8pt, drop shadow={opacity=0.05, shadow xshift=1pt, shadow yshift=-1pt}
+    },
+    eu/.style={
+        base, fill=white, text width=2.6cm, minimum height=3.2cm,
+        rounded corners=1pt, font=\sffamily\footnotesize, anchor=north
+    },
+    labeltext/.style={font=\bfseries\small, text=headerText, align=center},
+    code/.style={font=\ttfamily\footnotesize, color=subText},
+    wire/.style={
+        draw=lineColor, line width=1.0pt, -{Latex[length=2mm, width=1.5mm]}, rounded corners=2pt
+    },
+    group/.style={
+        draw=borderColor, dashed, fill=groupBg, rounded corners=4pt, inner sep=10pt
+    }
+}
+
+% Title
+\node (top_label) [font=\bfseries\large, color=lineColor] {RP2040 SIMT ARCHITECTURE (SINGLE LANE)};
+
+% Frontend / Fetch
+\node (frontend) [module, below=0.4cm of top_label] {
+    \textbf{Frontend: PIO State Machine} \\[-0.3em]
+    \textcolor{borderColor}{\rule{8cm}{0.4pt}} \\[0.3em]
+    {\footnotesize Fetch 32-bit Instr (ESP32 @ 50MB/s) $\rightarrow$ Local FIFO Decode}
+};
+
+% Register File
+\node (regfile) [module, below=0.6cm of frontend] {
+    \textbf{Register File (SRAM Bank)} \\[-0.3em]
+    \textcolor{borderColor}{\rule{8cm}{0.4pt}} \\[0.2em]
+    \begin{tabular}{r l}
+        \textbf{\texttt{R0-R31}} & : 32-bit GP \texttt{[High:BF16 | Low:BF16]} \\
+        \textbf{\texttt{P0-P7}} & : Predicate Masking \\
+        \textbf{\texttt{SR}} & : System State (\texttt{LANE\_ID})
+    \end{tabular}
+};
+
+% Execution Units
+\node (alu_bf16) [eu, below=1.8cm of regfile] {
+    \textbf{BF16 Tensor Core} \\
+    \textcolor{accentGreen}{\rule{1.5cm}{1pt}} \\
+    \vspace{0.2em}
+    \begin{tabular}{c}
+        BFADD2 \\ BFMUL2 \\ BFMA2 \\ CVT.BF16
+    \end{tabular}
+};
+
+\node (alu_int) [eu, left=0.3cm of alu_bf16] {
+    \textbf{Integer ALU} \\
+    \textcolor{lineColor}{\rule{1.5cm}{0.5pt}} \\
+    \vspace{0.2em}
+    \begin{tabular}{c}
+        IADD / IMUL \\ Logic (AND/OR) \\ CMP / ISETP \\ Address Calc
+    \end{tabular}
+};
+
+\node (sfu) [eu, right=0.3cm of alu_bf16] {
+    \textbf{SFU (Trans.)} \\
+    \textcolor{lineColor}{\rule{1.5cm}{0.5pt}} \\
+    \vspace{0.2em}
+    \begin{tabular}{c}
+        EXP2 (Softmax) \\ SIN/COS (RoPE) \\ RSQRT (Attn) \\ GELU
+    \end{tabular}
+};
+
+% Execution core background
+\begin{pgfonlayer}{background}
+    \node (core_bg) [group, fit=(alu_int)(sfu)(alu_bf16)] {};
+    \node [anchor=south west, font=\bfseries\scriptsize, color=lineColor!80] 
+        at (core_bg.north west) {EXECUTION DATAPATH};
+\end{pgfonlayer}
+
+% Load / Store Unit
+\node (lsu) [module, below=1.2cm of core_bg.south] {
+    \textbf{Load / Store Unit (LSU)} \\[-0.3em]
+    \textcolor{borderColor}{\rule{8cm}{0.4pt}} \\[0.2em]
+    {\footnotesize Logic: \texttt{Addr = Base + Offset + (LaneID * 4)}}
+    \vspace{0.2em}
+    \begin{itemize}
+         \setlength\itemsep{0em}
+         \scriptsize
+         \item[-] \textbf{LDG/STG}: Global Coalesced Access
+         \item[-] \textbf{LDL/STL}: Local Thread-Private Access
+    \end{itemize}
+};
+
+% Memory Hierarchy
+\node (mem_sram) [base, fill=white, below=0.8cm of lsu, text width=4cm, xshift=-2.2cm, minimum height=1.5cm] {
+    \textbf{Local SRAM} \\
+    \scriptsize (Banked / Stack)
+};
+
+\node (mem_vram) [base,fill=white, below=0.8cm of lsu, text width=4cm, xshift=2.2cm, minimum height=1.5cm] {
+    \textbf{Shared VRAM} \\
+    \scriptsize (Weights / KV Cache)
+};
+
+\begin{pgfonlayer}{background}
+    \node (mem_bg) [group, fit=(mem_sram)(mem_vram), fill=lineColor!5] {};
+    \node [anchor=north east, font=\bfseries\scriptsize, color=lineColor!80] 
+        at (mem_bg.south east) {MEMORY INTERFACE};
+\end{pgfonlayer}
+
+% Connections
+\draw [wire] (frontend) -- (regfile);
+
+\coordinate (dispatch_point) at ($(regfile.south) + (0,-0.5)$);
+\draw [wire] (regfile.south) -- (dispatch_point);
+\draw [wire] (dispatch_point) to[out=-90, in=90] (alu_int.north);
+\draw [wire] (dispatch_point) -- (alu_bf16.north);
+\draw [wire] (dispatch_point) to[out=-90, in=90] (sfu.north);
+
+\coordinate (collect_y) at ($(core_bg.south) + (0,-0.4)$);
+
+% All arrows point straight down
+\draw [line width=1.0pt, draw=lineColor] (alu_int.south) -- (alu_int.south |- collect_y);
+\draw [line width=1.0pt, draw=lineColor] (alu_bf16.south) -- (alu_bf16.south |- collect_y);
+\draw [line width=1.0pt, draw=lineColor] (sfu.south) -- (sfu.south |- collect_y);
+
+% Horizontal collection bus
+\draw [wire, -{Latex[length=0mm]}] ($(alu_int.south |- collect_y) + (-0.5,0)$) -- ($(sfu.south |- collect_y) + (0.5,0)$);
+% Center arrow down to LSU
+\draw [wire] ($(alu_bf16.south |- collect_y)$) -- (lsu.north);
+
+\coordinate (mem_split) at ($(lsu.south) + (0,-0.4)$);
+\draw [wire] (lsu.south) -- (mem_split);
+\draw [wire] (mem_split) to[out=-90, in=90] (mem_sram.north);
+\draw [wire] (mem_split) to[out=-90, in=90] (mem_vram.north);
+
+\node [right=0.2cm of regfile, font=\scriptsize, color=accentGreen, rotate=-90] {32-bit Wide};
+
+\end{tikzpicture}
+\caption{RP2040 Single-Lane SIMT Microarchitecture. The frontend fetches instructions via PIO, dispatches to execution units (Integer ALU, BF16 Tensor Core, SFU), and accesses memory through the LSU with lane-aware addressing.}
+\label{fig:rp2040_simt_arch}
+\end{figure*}
+
+\subsection{Instruction Encoding Format}
+
+All Micro-CUDA instructions use a fixed 32-bit encoding to simplify hardware decoding:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\sffamily\small,
+    field/.style={
+        rectangle,
+        draw=black!70,
+        thick,
+        minimum height=1.2cm,
+        align=center,
+        font=\sffamily\footnotesize
+    }
+]
+    % Define field widths (8 bits each = 2cm per field)
+    \def\fieldwidth{2.0cm}
+    
+    % Bit position labels (top)
+    \node[font=\scriptsize\ttfamily, anchor=south] at (0, 1.5) {31};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (2, 1.5) {24};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (2, 1.5) {23};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (4, 1.5) {16};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (4, 1.5) {15};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (6, 1.5) {8};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (6, 1.5) {7};
+    \node[font=\scriptsize\ttfamily, anchor=south] at (8, 1.5) {0};
+    
+    % Field boxes with colors
+    \node[field, fill=red!20, minimum width=\fieldwidth] (opcode) at (1, 0.6) {\textbf{OPCODE}\\ \scriptsize 8-bit};
+    \node[field, fill=blue!20, minimum width=\fieldwidth, right=0cm of opcode] (dest) {\textbf{DEST}\\ \scriptsize Reg Index};
+    \node[field, fill=green!20, minimum width=\fieldwidth, right=0cm of dest] (src1) {\textbf{SRC1}\\ \scriptsize Reg Index};
+    \node[field, fill=yellow!20, minimum width=\fieldwidth, right=0cm of src1] (src2) {\textbf{SRC2/IMM}\\ \scriptsize Reg or Imm8};
+    
+    % Bit range labels (bottom)
+    \node[font=\scriptsize, below=0.15cm of opcode] {[31:24]};
+    \node[font=\scriptsize, below=0.15cm of dest] {[23:16]};
+    \node[font=\scriptsize, below=0.15cm of src1] {[15:8]};
+    \node[font=\scriptsize, below=0.15cm of src2] {[7:0]};
+    
+\end{tikzpicture}
+\caption{32-bit Instruction Encoding Format. All fields are byte-aligned for efficient parsing.}
+\label{fig:instr_encoding}
+\end{figure}
+
+\textbf{Field Specifications:}
+\begin{itemize}
+    \item \textbf{OPCODE [31:24]:} Operation code (256 possible instructions, organized into groups 0x00-0xFF)
+    \item \textbf{DEST [23:16]:} Destination register (R0-R31, F0-F31, or P0-P7 depending on instruction type)
+    \item \textbf{SRC1 [15:8]:} First source operand register index
+    \item \textbf{SRC2/IMM [7:0]:} Second source register \textit{or} 8-bit immediate value (for \texttt{MOV}, \texttt{BRA}, etc.)
+\end{itemize}
+
+\subsection{Complete Instruction Set}
+
+\subsubsection{Group 1: System Control (Control \& Flow) [Opcode: 0x00 - 0x0F]}
+
+Handles core flow control, fully compatible with v1.5.
+
+\begin{table*}[htbp]
+\caption{System Control Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|p{8cm}|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Function Description} & \textbf{Compat} \\
+\hline
+\texttt{0x00} & \textbf{NOP} & - & No operation & v1.5 \\
+\texttt{0x01} & \textbf{EXIT} & - & Terminate kernel execution, release resources & v1.5 \\
+\texttt{0x02} & \textbf{BRA} & Imm & Unconditional branch (PC += Imm) & v1.5 \\
+\texttt{0x03} & \textbf{BR.Z} & Imm, Pn & Branch if Predicate $Pn$ is 0 & v1.5 \\
+\texttt{0x05} & \textbf{BAR.SYNC} & Id & Warp Barrier: wait for all lanes to sync & v1.5 \\
+\texttt{0x07} & \textbf{YIELD} & - & Yield time slice (cooperative multitasking) & v1.5 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsubsection{Group 2: Integer Arithmetic (Integer ALU) [Opcode: 0x10 - 0x1F]}
+
+Handles address calculation and logical control.
+
+\begin{table*}[htbp]
+\caption{Integer Arithmetic Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|p{8cm}|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Function Description} & \textbf{Compat} \\
+\hline
+\texttt{0x10} & \textbf{MOV} & Rd, Imm & Load immediate value & v1.5 \\
+\texttt{0x11} & \textbf{IADD} & Rd, Ra, Rb & Integer addition (address calculation core) & v1.5 \\
+\texttt{0x12} & \textbf{ISUB} & Rd, Ra, Rb & Integer subtraction & v1.5 \\
+\texttt{0x13} & \textbf{IMUL} & Rd, Ra, Rb & Integer multiplication (32-bit) & v1.5 \\
+\texttt{0x17} & \textbf{AND} & Rd, Ra, Rb & Bitwise AND & v1.5 \\
+\texttt{0x18} & \textbf{OR} & Rd, Ra, Rb & Bitwise OR & v1.5 \\
+\texttt{0x1A} & \textbf{ISETP.EQ} & Pn, Ra, Rb & If Ra == Rb, set Pn = 1 & v1.5 \\
+\texttt{0x1C} & \textbf{ISETP.GT} & Pn, Ra, Rb & If Ra $>$ Rb, set Pn = 1 & v1.5 \\
+\texttt{0x1D} & \textbf{SHL} & Rd, Ra, Imm & Logical shift left & v1.5 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsubsection{Group 3: Deep Learning \& Data Conversion (AI \& Conversion) [Opcode: 0x20 - 0x2F]}
+
+\textbf{} v2.0 additions focused on BF16 and Packed SIMD operations.
+
+\begin{table*}[htbp]
+\caption{AI \& Data Conversion Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|p{8cm}|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Function Description} & \textbf{Compat} \\
+\hline
+\texttt{0x20} & \textbf{CVT.BF16} & Rd, Ra & \textbf{} Convert FP32 (Ra) to BF16, store in Rd.Low & \textbf{v2.0} \\
+\texttt{0x21} & \textbf{CVT.F32} & Rd, Ra & \textbf{} Convert BF16 (Ra.Low) to FP32 (Rd) & \textbf{v2.0} \\
+\texttt{0x22} & \textbf{PACK2} & Rd, Ra, Rb & \textbf{} Pack Ra.Low and Rb.Low into Rd & \textbf{v2.0} \\
+\texttt{0x25} & \textbf{BFADD2} & Rd, Ra, Rb & \textbf{} Packed BF16 addition (processes High/Low) & \textbf{v2.0} \\
+\texttt{0x26} & \textbf{BFMUL2} & Rd, Ra, Rb & \textbf{} Packed BF16 multiplication (processes High/Low) & \textbf{v2.0} \\
+\texttt{0x27} & \textbf{BFMA2} & Rd, Ra, Rb & \textbf{} Packed BF16 FMA (\texttt{Rd += Ra * Rb}) & \textbf{v2.0} \\
+\texttt{0x28} & \textbf{BFRELU2} & Rd, Ra & \textbf{} Packed BF16 ReLU (\texttt{max(0, x)}) & \textbf{v2.0} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsubsection{Group 4: Floating Point \& Transcendental Functions (FP32 \& SFU) [Opcode: 0x30 - 0x5F]}
+
+Integrates v1.5 floating-point instructions with v2.0's complete Math Library.
+
+\begin{table*}[htbp]
+\caption{Floating Point \& SFU Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|p{8cm}|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Function Description} & \textbf{Compat} \\
+\hline
+\texttt{0x30} & \textbf{FADD} & Fd, Fa, Fb & FP32 addition (IEEE 754) & v1.5 \\
+\texttt{0x32} & \textbf{FMUL} & Fd, Fa, Fb & FP32 multiplication & v1.5 \\
+\texttt{0x34} & \textbf{FFMA} & Fd, Fa, Fb & FP32 Fused Multiply-Add & v1.5 \\
+\texttt{0x40} & \textbf{HMMA.I8} & Rd, Ra, Rb & 4-way INT8 Dot Product (Legacy) & v1.5 \\
+\texttt{0x50} & \textbf{SFU.RCP} & Rd, Ra & Reciprocal: $1/x$ (FP32) & v1.5 \\
+\texttt{0x51} & \textbf{SFU.EXP2} & Rd, Ra & \textbf{} Base-2 Exp: $2^x$ (BF16/FP32). Softmax key & \textbf{v2.0} \\
+\texttt{0x52} & \textbf{SFU.LOG2} & Rd, Ra & \textbf{} Base-2 Log: $\log_2 x$ & \textbf{v2.0} \\
+\texttt{0x53} & \textbf{SFU.RSQRT} & Rd, Ra & \textbf{} Fast Inverse Sqrt: $1/\sqrt{x}$. Attention scaling & \textbf{v2.0} \\
+\texttt{0x54} & \textbf{SFU.SIN} & Rd, Ra & \textbf{} Sine: $\sin(\pi x)$. RoPE key & \textbf{v2.0} \\
+\texttt{0x55} & \textbf{SFU.COS} & Rd, Ra & \textbf{} Cosine: $\cos(\pi x)$. RoPE key & \textbf{v2.0} \\
+\texttt{0x56} & \textbf{SFU.GELU} & Rd, Ra & GELU Activation (Fast Tanh approx) & v1.5 \\
+\texttt{0x57} & \textbf{SFU.TANH} & Rd, Ra & \textbf{} Tanh Activation & \textbf{v2.0} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsubsection{Group 5: Memory Operations [Opcode: 0x60 - 0x7F]}
+
+Core SIMT mechanism supporting Lane-Aware Addressing.
+
+\begin{table*}[htbp]
+\caption{Memory Operations}
+\begin{center}
+\begin{tabular}{|l|l|l|p{8cm}|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Function Description} & \textbf{Compat} \\
+\hline
+\texttt{0x60} & \textbf{LDG} & Rd, [Ra] & \textbf{Uniform Load:} All lanes read same address (Broadcast) & v1.5 \\
+\texttt{0x61} & \textbf{STG} & [Ra], Rd & \textbf{Uniform Store:} (usually with atomic ops) & v1.5 \\
+\texttt{0x62} & \textbf{LDS} & Rd, [Imm] & \textbf{Shared Load:} Read from Local Shared Memory & v1.5 \\
+\texttt{0x63} & \textbf{LDX} & Rd, [Ra+Rb] & \textbf{Indexed Load:} Gather (Ra=Base, Rb=Offset) & v1.5 \\
+\texttt{0x64} & \textbf{LDL} & Rd, [Ra] & \textbf{Lane Load:} \texttt{Addr = Ra + (LANEID * 4)}. SIMT core & v1.5 \\
+\texttt{0x65} & \textbf{STX} & [Ra+Rb], Rd & \textbf{Indexed Store:} Scatter write & \textbf{v2.0} \\
+\texttt{0x67} & \textbf{STL} & [Ra], Rd & \textbf{Lane Store:} \texttt{Addr = Ra + (LANEID * 4)} & v1.5 \\
+\texttt{0x70} & \textbf{ATOM.ADD} & [Ra], Rb & Atomic Add (Global/Shared) & v1.5 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsubsection{Group 6: System Instructions [Opcode: 0xF0 - 0xFF]}
+
+\begin{table*}[htbp]
+\caption{System Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|p{8cm}|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Function Description} & \textbf{Compat} \\
+\hline
+\texttt{0xF0} & \textbf{S2R} & Rd, SRn & System to Register (read Lane ID, etc.) & v1.5 \\
+\texttt{0xF1} & \textbf{R2S} & SRn, Rd & \textbf{} Register to System (Debug/Config) & \textbf{v2.0} \\
+\texttt{0xF2} & \textbf{TRACE} & Imm & \textbf{} Send Debug Trace Event & \textbf{v2.0} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsection{Implementation Details: Math Library \& BF16}
+
+To overcome RP2040 hardware limitations, v2.0 instructions are implemented at the Firmware layer (Micro-CUDA VM):
+
+\subsubsection{Packed BF16 Emulation (SIMD2)}
+
+A 32-bit register is treated as \texttt{[ High: BF16\_1 | Low: BF16\_0 ]}.
+
+\textbf{Example: \texttt{BFADD2 Rd, Ra, Rb} C++ Implementation Logic:}
+
+\begin{lstlisting}[language=C++, caption={Firmware Logic for Packed BF16 Addition}]
+// Firmware Logic
+uint32_t op_bfadd2(uint32_t a, uint32_t b) {
+    uint16_t a_lo = a & 0xFFFF; 
+    uint16_t a_hi = a >> 16;
+    uint16_t b_lo = b & 0xFFFF; 
+    uint16_t b_hi = b >> 16;
+    
+    // Software-emulated BF16 addition
+    // Without FPU, only need to handle mantissa/exponent
+    uint16_t res_lo = soft_bf16_add(a_lo, b_lo);
+    uint16_t res_hi = soft_bf16_add(a_hi, b_hi);
+    
+    return (res_hi << 16) | res_lo;
+}
+\end{lstlisting}
+
+\subsubsection{SFU Transcendental Functions (Lookup Tables)}
+
+\begin{itemize}
+    \item \textbf{SIN/COS:} Pre-burned 2KB \texttt{sin} lookup table in RP2040 Flash (1024 entries, BF16). Linear interpolation (Lerp) during execution.
+    \item \textbf{EXP2:} Uses $2^x$ lookup table. To compute $e^x$, compiler auto-inserts multiplication: $e^x = 2^{x \cdot \log_2 e}$.
+    \item \textbf{RSQRT:} Uses BF16-optimized version of Quake III Fast Inverse Square Root algorithm.
+\end{itemize}
+
+\subsection{Code Example: v2.0 Softmax Kernel}
+
+This example demonstrates mixing \textbf{SIMT loading (v1.5)} with \textbf{Math Library/BF16 (v2.0)}.
+
+\begin{lstlisting}[language={[x86masm]Assembler}, caption={Softmax Kernel: Exp(x) / Sum(Exp(x))}]
+; Kernel: Softmax (Exp(x) / Sum(Exp(x)))
+; Input: R0 (Base Address of Input Array, Packed BF16)
+; Warp Size: 8 Lanes
+
+; 1. Initialization
+S2R     R31, SR_LANEID      ; Get Lane ID
+
+; 2. Load Data (SIMT)
+; LDL auto-offsets address: Addr = R0 + LaneID * 4
+; Each lane loads 2 BF16 values (Packed)
+LDL     R1, [R0]            ; R1 = [x_odd, x_even]
+
+; 3. Compute Exponent (Exp) - using v2.0 SFU
+; Convert to Base-2: x * log2(e)
+MOV     R2, 0x3FB80000      ; R2 = Packed BF16 constant (log2(e))
+BFMUL2  R1, R1, R2          ; Packed Multiply
+SFU.EXP2 R3, R1             ; R3 = [2^(x_odd), 2^(x_even)] approx e^x
+
+; 4. Local Sum
+; Add packed values, store in FP32 to prevent overflow
+CVT.F32 R4, R3              ; R4 = FP32(R3.Low)
+SHL     R5, R3, 16          ; Shift High to Low
+CVT.F32 R5, R5              ; R5 = FP32(R3.High)
+FADD    R6, R4, R5          ; R6 = Local Sum (FP32)
+
+; 5. Warp Reduction (simplified demonstration)
+; Typically requires SHFL instruction or Shared Memory data exchange
+; Assume R7 contains final warp-wide sum broadcast value
+
+; 6. Normalization
+SFU.RCP R8, R7              ; R8 = 1 / TotalSum
+CVT.BF16 R8, R8             ; Convert back to BF16
+PACK2   R8, R8, R8          ; Duplicate to High/Low: R8 = [1/S, 1/S]
+
+BFMUL2  R9, R3, R8          ; R9 = Exp(x) * (1/Sum) = Softmax(x)
+
+; 7. Write Back
+MOV     R10, 0x2000         ; Output Base
+STL     [R10], R9           ; Lane-Aware Store
+EXIT
+\end{lstlisting}
+
+\subsection{SIMT Execution Model Summary}
+
+The Micro-CUDA implementation guarantees the following execution characteristics:
+
+\begin{itemize}
+    \item \textbf{True SIMT:} All active lanes execute the same instruction PC in lock-step
+    \item \textbf{Lane-Awareness:} Lane IDs are hardware-integrated, removing need for software indexing
+    \item \textbf{Independent Registers:} Changes to R/F registers in one lane do not affect others
+    \item \textbf{Shared VRAM:} All lanes share a unified 32-bit address space for inter-lane communication
+\end{itemize}

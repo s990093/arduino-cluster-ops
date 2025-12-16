@@ -1,0 +1,370 @@
+\section{Hardware Pipeline and Topology}
+
+This architecture implements a strict hardware-level pipeline, physically emulating the GPU execution model (Host $\to$ GigaThread Engine $\to$ SM $\to$ CUDA Cores). To achieve the high-speed throughput required for ``Memory Streaming'' and the Parallel Bus, the physical planning of GPIOs is critical. 
+
+\subsection{Split-Bus Architecture}
+
+To maximize performance, the system avoids a shared bus topology in favor of a \textbf{Dual-Port Split-Bus} architecture. This design enables a true pipeline: while the AMB82-Mini (Layer 1) fills Buffer A on the ESP32-S3 (Layer 2), the ESP32-S3 can simultaneously broadcast data from Buffer B to the RP2040s (Layer 3).
+
+\begin{enumerate}
+    \item \textbf{Global G-BUS (Upstream)}: Handles bulk tensor data transfer from AMB82-Mini to ESP32-S3 (50MB/s).
+    \item \textbf{Local G-BUS (Downstream)}: Handles instruction and local data broadcast from ESP32-S3 to the array of RP2040s.
+\end{enumerate}
+
+\subsection{Pin Mapping Strategy}
+The GPIO mapping is optimized for Direct Memory Access (DMA) and Programmable I/O (PIO), ensuring that data lines are physically contiguous for single-cycle operations.
+
+\subsubsection{Layer 1: AMB82-Mini (GPU Master)}
+The AMB82-Mini drives the Global G-BUS using its high-speed GPIOs. Efficient 8-bit parallel output requires direct register manipulation.
+
+\begin{table}[h]
+\centering
+\caption{Global G-BUS Pinout (AMB82-Mini)}
+\resizebox{0.95\columnwidth}{!}{%
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Signal} & \textbf{Type} & \textbf{Pin} & \textbf{Function} \\ \hline
+G\_DATA\_[0..7] & OUT & D0--D7 & 8-bit Parallel Data Bus \\ \hline
+G\_WR & OUT & D8 & Write Strobe (Active Low) \\ \hline
+G\_DC & OUT & D9 & Data/Command Select \\ \hline
+G\_CS\_[0..1] & OUT & D10, D11 & Chip Select for SM 0, SM 1 \\ \hline
+G\_BUSY & IN & D12 & Flow Control (Wait State) \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Layer 2: ESP32-S3 (Streaming Multiprocessor)}
+The ESP32-S3 acts as a router with dual separated interfaces to support full-duplex pipelining. The input (Slave) pins are mapped to lower GPIOs for compatibility with the I2S0/Camera interface, while output (Master) pins are mapped to higher GPIOs to avoid strapping pins and Octal PSRAM conflicts.
+
+\begin{table}[h]
+\centering
+\caption{ESP32-S3 Interface Mapping}
+\resizebox{0.95\columnwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Signal} & \textbf{ESP32 Pin} & \textbf{Description} \\ \hline
+\multicolumn{3}{|c|}{\textbf{Input Interface (Slave) - From AMB82}} \\ \hline
+G\_DATA\_[0..7] & GPIO 1--9 & Bits 0-7 (Skipping GPIO 3) \\ \hline
+G\_WR & GPIO 10 & PCLK / Write Strobe \\ \hline
+G\_DC / G\_CS & GPIO 11 / 12 & Control Signals \\ \hline
+G\_BUSY & GPIO 13 & Output to Master \\ \hline
+\multicolumn{3}{|c|}{\textbf{Output Interface (Master) - To RP2040}} \\ \hline
+L\_DATA\_[0..3] & GPIO 15--18 & Low Nibble \\ \hline
+L\_DATA\_[4..7] & GPIO 39--42 & High Nibble \\ \hline
+L\_WR / L\_DC & GPIO 48 / 47 & Write Strobe / Data-Cmd \\ \hline
+L\_CS\_[0..3] & 14, 21, 38, 3 & Chip Selects for active SMSP \\ \hline
+SYNC\_TRIG & GPIO 46 & Global Barrier Sync \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Layer 3: RP2040 (SMSP Cores)}
+The RP2040's Programmable I/O (PIO) requires strictly contiguous pins for efficient \texttt{IN PINS} instructions. All RP2040s share the Local G-BUS data lines but receive unique Chip Select signals.
+
+\noindent \textbf{PIO/Pin Mapping}:
+\begin{itemize}
+    \item \textbf{Data [0-7]}: GP0 -- GP7 (Contiguous Block)
+    \item \textbf{WR Strobe}: GP8 (JMP Pin)
+    \item \textbf{DC Signal}: GP9 (Side-set)
+    \item \textbf{CS Input}: GP10 (IRQ/Enable)
+    \item \textbf{Sync}: GP11 (Wait/Barrier)
+\end{itemize}
+
+\subsection{System Corner Diagram}
+The following ``Corner Diagrams'' illustrate the hardware pipeline topology, emphasizing the flow of data, control signals, and the fan-out structure from Host to Threads.
+
+\subsubsection{High-Level Data Flow}
+\begin{figure}[htbp]
+\centering
+\resizebox{0.8\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    box/.style={draw, rounded corners, align=center, fill=white, drop shadow, font=\sffamily\small},
+    graybox/.style={box, fill=gray!10},
+    bluebox/.style={box, fill=blue!5},
+    arrow/.style={-latex, thick},
+    bus/.style={-latex, line width=2pt}
+]
+    % AMB82
+    \node[graybox, minimum width=6cm, minimum height=1.5cm] (amb) {
+        \textbf{AMB82-Mini}\\GPU Master / Host\\DDR / VRAM
+    };
+
+    % ESP32
+    \node[bluebox, minimum width=8cm, minimum height=2.5cm, below=2cm of amb] (esp) {};
+    \node[anchor=north, font=\bfseries\sffamily] at (esp.north) {ESP32-S3 (Streaming Multiprocessor)};
+    
+    % Buffers inside ESP32
+    \node[box, fill=white, below right=0.8cm and 0.5cm of esp.north west, minimum width=2.5cm] (bufA) {Buffer A};
+    \node[box, fill=white, below left=0.8cm and 0.5cm of esp.north east, minimum width=2.5cm] (bufB) {Buffer B};
+    \draw[<->, dashed] (bufA) -- (bufB) node[midway, above, font=\scriptsize] {Switch};
+
+    % Global Bus
+    \draw[bus] (amb.south) -- node[midway, right, align=left, font=\footnotesize] {Global G-BUS\\8-bit Parallel + WR} (esp.north);
+
+    % Local Bus Outputs
+    \draw[bus] (bufA.south) -- ++(0,-1.0) node[below, font=\footnotesize, align=center] {Local G-BUS\\(Broadcast)};
+    \draw[bus] (bufB.south) -- ++(0,-1.0) node[below, font=\footnotesize, align=center] {Local G-BUS\\(Broadcast)};
+
+    \node[font=\scriptsize, align=center] at ($(esp.south)+(0,0.5)$) {Pipeline Overlap\\(Simultaneous RX \& TX)};
+
+\end{tikzpicture}
+}
+\caption{High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores.}
+\label{fig:high_level_pipeline}
+\end{figure}
+
+\subsubsection{SMSP Fan-out View}
+This view corresponds to the GPU hierarchy: ESP32-S3 (GigaThread Engine) distributing work to multiple RP2040s (SMs/SMSPs).
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=1.0cm,
+    box/.style={draw, rounded corners, align=center, fill=white, drop shadow, font=\sffamily\scriptsize},
+    core/.style={box, fill=red!5, minimum width=2.2cm},
+    esp/.style={box, fill=blue!5, minimum width=10cm, minimum height=1cm}
+]
+    % ESP32 Top
+    \node[esp] (scheduler) {\textbf{ESP32-S3 (SM / Scheduler)}\\Wait for Sync / Dispatch Ops};
+
+    % RP2040s
+    \node[core, below=1.5cm of scheduler, xshift=-3.3cm] (rp0) {RP2040 \#0\\SMSP Core};
+    \node[core, right=0.2cm of rp0] (rp1) {RP2040 \#1\\SMSP Core};
+    \node[core, right=0.2cm of rp1] (rp2) {RP2040 \#2\\SMSP Core};
+    \node[core, right=0.2cm of rp2] (rp3) {RP2040 \#3\\SMSP Core};
+
+    % CS Lines (Fan out)
+    \draw[-latex] (scheduler.south) -- (rp0.north);
+    \draw[-latex] (scheduler.south) -- (rp1.north);
+    \draw[-latex] (scheduler.south) -- (rp2.north);
+    \draw[-latex] (scheduler.south) -- (rp3.north);
+    \node[font=\tiny, fill=white] at ($(scheduler.south)+(0,-0.7)$) {CS Lines};
+
+    % PIO Blocks
+    \node[box, fill=yellow!10, below=0.5cm of rp0] (pio0) {PIO RX\\FIFO};
+    \node[box, fill=yellow!10, below=0.5cm of rp1] (pio1) {PIO RX\\FIFO};
+    \node[box, fill=yellow!10, below=0.5cm of rp2] (pio2) {PIO RX\\FIFO};
+    \node[box, fill=yellow!10, below=0.5cm of rp3] (pio3) {PIO RX\\FIFO};
+
+    \draw[-latex] (rp0) -- (pio0);
+    \draw[-latex] (rp1) -- (pio1);
+    \draw[-latex] (rp2) -- (pio2);
+    \draw[-latex] (rp3) -- (pio3);
+
+    % Cortex Cores
+    \node[box, fill=green!5, below=0.5cm of pio0] (cm0) {Cortex-M0+\\Thread Block};
+    \node[box, fill=green!5, below=0.5cm of pio1] (cm1) {Cortex-M0+\\Thread Block};
+    \node[box, fill=green!5, below=0.5cm of pio2] (cm2) {Cortex-M0+\\Thread Block};
+    \node[box, fill=green!5, below=0.5cm of pio3] (cm3) {Cortex-M0+\\Thread Block};
+
+    \draw[-latex] (pio0) -- (cm0);
+    \draw[-latex] (pio1) -- (cm1);
+    \draw[-latex] (pio2) -- (cm2);
+    \draw[-latex] (pio3) -- (cm3);
+
+\end{tikzpicture}
+}
+\caption{SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus.}
+\label{fig:smsp_fanout}
+\end{figure}
+
+\subsection{Physical Implementation Notes}
+To ensure stability of the parallel bus:
+\begin{enumerate}
+    \item \textbf{Common Ground}: A robust ground connection linking AMB82, ESP32, and all RP2040s is mandatory to prevent signal integrity issues.
+    \item \textbf{Bus Length}: The Global G-BUS should be kept under 10cm. The Local G-BUS should utilize a PCB backplane or shielded ribbon cables with interspersed ground lines (G-S-S-S-G).
+    \item \textbf{Power Distribution}: The RP2040 array requires a dedicated 5V power rail injected into VSYS, as USB power is insufficient for full-load parallel execution.
+\end{enumerate}
+
+\subsection{Pipeline Timing Analysis}
+
+The system achieves a ``Fully Overlapped Pipeline'' through double-buffering at the ESP32-S3 layer. Figure \ref{fig:pipeline_timing} illustrates the cycle-level behavior where data transmission and computation occur simultaneously.
+
+\begin{figure*}[htbp]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+    xscale=1.5, yscale=0.8,
+    font=\sffamily\footnotesize,
+    box/.style={draw, rounded corners, fill=white, align=center, drop shadow, minimum height=0.6cm},
+    amb/.style={box, fill=gray!20},
+    esp_rx/.style={box, fill=blue!10},
+    esp_tx/.style={box, fill=blue!20},
+    rp/.style={box, fill=green!20},
+    time_line/.style={draw=gray, dashed}
+]
+
+    % Time Axis
+    \foreach \x in {0,...,9} {
+        \node[text=gray] at (\x, 4) {C\x};
+        \draw[time_line] (\x, 3.5) -- (\x, -5);
+    }
+    \draw[->, thick] (-0.5, 3.8) -- (9.5, 3.8) node[right] {Time};
+
+    % Labels
+    \node[anchor=east] at (-0.5, 3) {\textbf{AMB82} (Master)};
+    \node[anchor=east] at (-0.5, 1.5) {\textbf{ESP32} (RX DMA)};
+    \node[anchor=east] at (-0.5, 0) {\textbf{ESP32} (TX Local)};
+    \node[anchor=east] at (-0.5, -2.5) {\textbf{RP2040} (SMSP)};
+
+    % AMB82 Sequence
+    \node[amb, minimum width=1.4cm] at (0.5, 3) {CMD};
+    \node[amb, minimum width=2.9cm] at (2.0, 3) {DATA BLOCK 0};
+    \node[amb, minimum width=2.9cm] at (4.0, 3) {DATA BLOCK 1};
+    \node[amb, minimum width=2.9cm] at (6.0, 3) {DATA BLOCK 2};
+
+    % ESP32 RX Sequence
+    \node[esp_rx, minimum width=2.9cm] at (2.5, 1.8) {RX Buffer A};
+    \node[esp_rx, minimum width=2.9cm] at (4.5, 1.2) {RX Buffer B};
+    \node[esp_rx, minimum width=2.9cm] at (6.5, 1.8) {RX Buffer A};
+
+    % Arrows AMB -> ESP
+    \draw[->, gray] (2.0, 2.7) -- (2.0, 2.1);
+    \draw[->, gray] (4.0, 2.7) -- (4.0, 1.5);
+    \draw[->, gray] (6.0, 2.7) -- (6.0, 2.1);
+
+    % ESP32 TX Sequence
+    \node[esp_tx, minimum width=2.9cm] at (4.5, 0) {TX Buffer A};
+    \node[esp_tx, minimum width=2.9cm] at (6.5, 0) {TX Buffer B};
+
+    % Arrows RX -> TX
+    \draw[->, dashed, gray] (2.5, 1.5) -- (3.5, 0.3);
+
+    % RP2040 Compute Sequence
+    \node[rp, minimum width=2.9cm] at (5.0, -1.5) {Compute Block 0};
+    \node[rp, minimum width=2.9cm] at (5.0, -2.2) {Compute Block 0};
+    \node[rp, minimum width=2.9cm] at (5.0, -2.9) {Compute Block 0};
+    \node[rp, minimum width=2.9cm] at (5.0, -3.6) {Compute Block 0};
+    \node[anchor=west, font=\tiny, text=gray] at (6.6, -1.5) {Simple Parallelsim};
+    
+    \node[rp, minimum width=2.9cm] at (7.0, -1.5) {Compute Block 1};
+    \node[rp, minimum width=2.9cm] at (7.0, -2.2) {Compute Block 1};
+    \node[rp, minimum width=2.9cm] at (7.0, -2.9) {Compute Block 1};
+    \node[rp, minimum width=2.9cm] at (7.0, -3.6) {Compute Block 1};
+
+    % Highlight Overlap Region
+    \draw[red, thick, rounded corners] (3.1, 3.4) rectangle (5.9, -4.0);
+    \node[red, font=\bfseries] at (4.5, -4.5) {Fully Overlapped (Pipeline)};
+
+\end{tikzpicture}
+}
+\caption{Cycle-Level Pipeline Timing. During cycles C3--C5, the system effectively overlaps High-Level Data Injection (AMB82), Mid-Level Broadcasting (ESP32), and Low-Level Computation (RP2040).}
+\label{fig:pipeline_timing}
+\end{figure*}
+
+\subsection{Execution Model Mapping}
+
+The mapping between the CUDA execution model and our physical cluster is strictly hierarchical, as shown in Figure \ref{fig:execution_mapping}.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.95\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    layer/.style={draw, fill=white, rounded corners, drop shadow, align=center, font=\sffamily\footnotesize, minimum width=6cm},
+    cuda_blk/.style={layer, fill=green!10},
+    our_blk/.style={layer, fill=blue!10},
+    arrow/.style={->, >=latex, thick}
+]
+    % CUDA Stack
+    \node[font=\bfseries] (cuda_title) {CUDA GPU Model};
+    \node[cuda_blk, below=0.2cm of cuda_title] (host) {Host CPU};
+    \node[cuda_blk, below=of host] (giga) {GigaThread Engine};
+    \node[cuda_blk, below=of giga] (sm) {Streaming Multiprocessor (SM)};
+    \node[cuda_blk, below=of sm] (core) {CUDA Cores / Warp Schedulers};
+
+    \draw[arrow] (host) -- (giga);
+    \draw[arrow] (giga) -- (sm);
+    \draw[arrow] (sm) -- (core);
+
+    % Our Stack
+    \node[font=\bfseries, right=1.5cm of cuda_title] (our_title) {This Architecture};
+    \node[our_blk, below=0.2cm of our_title] (amb) {AMB82-Mini (Master)};
+    \node[our_blk, below=of amb] (esp) {ESP32-S3 (Scheduler)};
+    \node[our_blk, below=of esp] (rp) {RP2040 (SMSP Core)};
+    \node[our_blk, below=of rp] (pio) {PIO + Cortex-M0+};
+
+    \draw[arrow] (amb) -- (esp);
+    \draw[arrow] (esp) -- (rp);
+    \draw[arrow] (rp) -- (pio);
+
+    % Connection Lines
+    \draw[dashed, gray] (host) -- (amb);
+    \draw[dashed, gray] (giga) -- (esp);
+    \draw[dashed, gray] (sm) -- (rp);
+    \draw[dashed, gray] (core) -- (pio);
+
+\end{tikzpicture}
+}
+\caption{Conceptual Execution Model Mapping. The physical hardware layers directly correspond to the logical hierarchy of the CUDA execution model.}
+\label{fig:execution_mapping}
+\end{figure}
+
+\subsubsection{Hardware Component Mapping}
+Table \ref{tab:hw_mapping} details the specific correspondence between CUDA logical entities and the physical components of this cluster.
+
+\begin{table}[htbp]
+\centering
+\caption{Hardware Mapping: CUDA vs. $\mu$GPU Cluster}
+\label{tab:hw_mapping}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{CUDA Model} & \textbf{NVIDIA GPU} & \textbf{This Architecture} \\ \hline
+Host & CPU & AMB82-Mini \\ \hline
+Global Memory & GDDR / HBM & DDR (AMB82 Built-in) \\ \hline
+\texttt{memcpyAsync} & DMA Engine & Global G-BUS + ESP32 DMA \\ \hline
+GigaThread Engine & Work Distributor & ESP32-S3 (Core 0/1) \\ \hline
+Stream & CUDA Stream & Double Buffer Exchange \\ \hline
+SM & Streaming Multi-proc. & RP2040 (SMSP) \\ \hline
+Warp & 32 Threads & SIMD Loop / PIO Batch \\ \hline
+Warp Scheduler & HW Scheduler & PIO State Machine (Stateless) \\ \hline
+Register File & SM Registers & Cortex-M0+ Regs + SRAM \\ \hline
+Shared Memory & SMEM & RP2040 SRAM Banking \\ \hline
+Load/Store Unit & LD/ST Unit & PIO \texttt{IN PINS} / \texttt{PUSH} \\ \hline
+Kernel Launch & \texttt{<<< >>>} & \texttt{SYNC\_TRIG} Signal \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Kernel Launch Flow}
+The kernel launch process utilizes the control hierarchy to broadcast parameters before triggering a synchronous start.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.85\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    evt/.style={draw, rounded corners, fill=white, drop shadow, font=\tiny\sffamily, align=center},
+    edge/.style={->, >=latex}
+]
+    \node[evt, fill=gray!20] (amb) {\textbf{AMB82}\\CMD: KERNEL\_CONFIG};
+    
+    \node[evt, fill=blue!10, below=1cm of amb] (esp_rx) {\textbf{ESP32-S3}\\Broadcast Params};
+    \draw[edge] (amb) -- (esp_rx);
+
+    \node[evt, fill=green!10, below right=1cm and -1cm of esp_rx] (rp1) {RP2040 \#1};
+    \node[evt, fill=green!10, left=0.2cm of rp1] (rp0) {RP2040 \#0};
+    \node[evt, fill=green!10, right=0.2cm of rp1] (rp2) {RP2040 \#2};
+    \node[evt, fill=green!10, right=0.2cm of rp2] (rp3) {RP2040 \#3};
+
+    \draw[edge] (esp_rx) -- (rp0);
+    \draw[edge] (esp_rx) -- (rp1);
+    \draw[edge] (esp_rx) -- (rp2);
+    \draw[edge] (esp_rx) -- (rp3);
+
+    \node[circle, draw, fill=red, text=white, font=\bfseries\tiny, below=1.0cm of rp1] (trig) {SYNC};
+    \draw[edge, dashed, red, thick] (trig) -- (rp0);
+    \draw[edge, dashed, red, thick] (trig) -- (rp1);
+    \draw[edge, dashed, red, thick] (trig) -- (rp2);
+    \draw[edge, dashed, red, thick] (trig) -- (rp3);
+    
+    \node[below=0.2cm of trig, font=\tiny] {Global Barrier Release};
+
+\end{tikzpicture}
+}
+\caption{Kernel Launch Synchronization. Parameters are broadcast first, followed by a hardware-wired AND/OR barrier release for microsecond-level synchronization.}
+\label{fig:kernel_launch}
+\end{figure}

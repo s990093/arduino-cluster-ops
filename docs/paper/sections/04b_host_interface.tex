@@ -1,0 +1,160 @@
+\section{Host Interface and CLI}
+
+The system implements a robust host-device communication protocol designed to maximize throughput over the UART interface, utilizing a "Turbo Mode" for high-speed data transfer.
+
+\subsection{Turbo Mode Configuration}
+To facilitate rapid kernel loading and large data transfers (DMA), the ESP32 is configured in \textbf{Turbo Mode}. As detailed in Table \ref{tab:turbo_config}, the baud rate is quadrupled to 460,800 bps, and a large 32KB RX buffer is allocated to prevent overflows during burst writes.
+
+\begin{table}[htbp]
+\caption{Turbo Mode Parameters}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
+\hline
+\texttt{VM\_BAUD\_RATE} & 460,800 & 4x Standard Speed \\
+\hline
+\texttt{VM\_SERIAL\_RX\_SIZE} & 32,768 & 32KB Ring Buffer \\
+\hline
+\texttt{VM\_CPU\_FREQ} & 240 MHz & Locked for IO Throughput \\
+\hline
+\end{tabular}
+\label{tab:turbo_config}
+\end{center}
+\end{table}
+
+This configuration achieves a measured application throughput of approximately \textbf{40.8 KB/s}, allowing a 1KB kernel binary to be loaded in under 30ms.
+
+\subsection{Communication Protocol}
+The host interface employs a hybrid \textbf{ASCII Command + Binary Burst} protocol to balance human readability with machine efficiency.
+
+\subsubsection{Host-to-Device DMA (\texttt{dma\_h2d})}
+For transferring large tensors to VRAM:
+\begin{enumerate}
+    \item \textbf{Request}: Host sends \texttt{dma\_h2d <addr> <size>\\n} (ASCII).
+    \item \textbf{Handshake}: Device verifies memory availability and responds with \texttt{ACK\_DMA\_GO:<size>}.
+    \item \textbf{Transmission}: Host sends the binary payload immediately in a contiguous block.
+    \item \textbf{Completion}: Device confirms with \texttt{DMA\_OK}.
+\end{enumerate}
+
+\subsubsection{Kernel Loading (\texttt{load\_imem})}
+Similar to DMA, but targeted at the high-speed Instruction Memory (IMEM) located in DRAM. The protocol ensures that the binary instruction stream is correctly placed and ready for execution.
+
+\subsection{LZ4 Compression for Bandwidth Optimization}
+
+To mitigate the UART bandwidth bottleneck (460,800 baud $\approx$ 41 KB/s), the system implements \textbf{LZ4 real-time decompression} for both kernel loading and data transfer operations. LZ4 is selected for its exceptional decompression speed ($>$1 GB/s on modern MCUs) and minimal memory footprint, making it ideal for resource-constrained embedded systems.
+
+\subsubsection{LZ4-Compressed Kernel Loading (\texttt{load\_imem\_lz4})}
+
+The compressed kernel loading protocol follows a chunked streaming approach:
+
+\begin{enumerate}
+    \item \textbf{Request}: Host sends \texttt{load\_imem\_lz4 \textless uncompressed\_size\textgreater\\n} (ASCII).
+    \item \textbf{Handshake}: Device allocates decompression buffers and responds with \texttt{ACK\_LZ4\_GO}.
+    \item \textbf{Chunked Transmission}: 
+    \begin{itemize}
+        \item Host sends compressed data in 2KB chunks
+        \item Each chunk: 2-byte header (compressed size) + compressed payload
+        \item Device decompresses using \texttt{LZ4\_decompress\_safe()} with bounds checking
+    \end{itemize}
+    \item \textbf{Validation}: Device verifies total decompressed bytes match \texttt{uncompressed\_size}
+    \item \textbf{Completion}: Device confirms with \texttt{LZ4\_LOAD\_OK}
+\end{enumerate}
+
+\subsubsection{LZ4-Compressed Data Transfer (\texttt{dma\_h2d\_lz4})}
+
+Similar to \texttt{load\_imem\_lz4}, but writes decompressed data directly to VRAM at the specified address:
+
+\begin{itemize}
+    \item \textbf{Format}: \texttt{dma\_h2d\_lz4 \textless hex\_addr\textgreater{} \textless uncompressed\_size\textgreater}
+    \item \textbf{Use Case}: Transferring large weight matrices or activation tensors for neural network inference
+\end{itemize}
+
+\subsubsection{Error Handling}
+
+The LZ4 subsystem implements robust error detection:
+
+\begin{table}[htbp]
+\caption{LZ4 Error Codes}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Error Code} & \textbf{Cause} \\
+\hline
+\texttt{ERR\_LZ4\_HEAD\_TIMEOUT} & Chunk header not received within timeout \\
+\hline
+\texttt{ERR\_LZ4\_DATA\_TIMEOUT} & Compressed payload timeout \\
+\hline
+\texttt{ERR\_LZ4\_CORRUPT} & Decompression failed (corrupted data) \\
+\hline
+\end{tabular}
+\label{tab:lz4_errors}
+\end{center}
+\end{table}
+
+\subsubsection{Performance Benefits}
+
+Empirical measurements on typical Micro-CUDA kernels show:
+
+\begin{itemize}
+    \item \textbf{Compression Ratio}: 2.5x - 4.0x for instruction streams (high redundancy in opcodes)
+    \item \textbf{Effective Bandwidth}: $\sim$120 KB/s (vs. 41 KB/s raw)
+    \item \textbf{Decompression Overhead}: $<$2ms per 2KB chunk (negligible compared to UART transfer time)
+    \item \textbf{Memory Cost}: 2KB decompression buffer + 2.5KB compressed buffer
+\end{itemize}
+
+This optimization is critical for loading large kernels (e.g., Transformer attention blocks $>$10KB) within acceptable latency constraints.
+
+\subsection{CLI Command Set}
+The Front-End CLI supports a comprehensive set of commands for controlling the VM, managing memory, and debugging.
+
+\begin{table}[htbp]
+\caption{CLI Command Reference}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Command} & \textbf{Format} & \textbf{Description} \\
+\hline
+\texttt{load\_imem} & \texttt{load\_imem \textless bytes\textgreater} & Load Kernel Binary (Turbo) \\
+\hline
+\texttt{load\_imem\_lz4} & \texttt{load\_imem\_lz4 \textless size\textgreater} & Load Compressed Kernel (LZ4) \\
+\hline
+\texttt{dma\_h2d} & \texttt{dma\_h2d \textless addr\textgreater{} \textless len\textgreater} & Host-to-Device Transfer \\
+\hline
+\texttt{dma\_h2d\_lz4} & \texttt{dma\_h2d\_lz4 \textless addr\textgreater{} \textless size\textgreater} & Compressed H2D Transfer (LZ4) \\
+\hline
+\texttt{dma\_d2h} & \texttt{dma\_d2h \textless addr\textgreater{} \textless len\textgreater} & Device-to-Host (Hex Dump) \\
+\hline
+\texttt{kernel\_launch} & \texttt{kernel\_launch} & Trigger Execution (Blocking) \\
+\hline
+\texttt{gpu\_reset} & \texttt{gpu\_reset} & Reset Registers/PC (Keep VRAM) \\
+\hline
+\texttt{reg} & \texttt{reg \textless lane\_id\textgreater} & Inspect Register File for Lane \\
+\hline
+\texttt{stats} & \texttt{stats} & Show VM Status (PC, VRAM) \\
+\hline
+\texttt{trace:stream} & \texttt{trace:stream} & Enable Real-time Execution Trace \\
+\hline
+\end{tabular}
+\label{tab:cli_commands}
+\end{center}
+\end{table}
+
+This interface allows developers to interactively debug kernels using Python scripts or a serial terminal, providing visibility into the internal state of the SIMT cores.
+
+\subsection{Software Stack \& Programming Model}
+To abstract low-level assembly complexity, a two-tier software stack is proposed:
+
+\subsubsection{Micro-CUDA Compiler (ucuda-cc)}
+A Python-based intermediate compiler translates C-like kernel syntax into Micro-CUDA assembly. It performs automatic register allocation (linear scan) and label resolution, simplifying kernel development.
+
+\subsubsection{PyCUDA-Lite API}
+A high-level Python wrapper mirrors the standard CUDA Driver API interactions:
+\begin{lstlisting}[language=Python]
+# Host Code Example
+mod = SourceModule(kernel_code)
+func = mod.get_function("vecAdd")
+# Grid=(1,1,1), Block=(8,1,1)
+func(dest, src1, src2, block=(8,1,1))
+\end{lstlisting}
+This API handles context management, memory transfers (\texttt{memcpy\_htod}), and kernel launches automatically.

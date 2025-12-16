@@ -1,0 +1,21 @@
+\section*{Revision History}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|p{4cm}|}
+\hline
+\textbf{Version} & \textbf{Date} & \textbf{Author} & \textbf{Description} \\ \hline
+0.1 & 2024-10-01 & Hung-Wei Machine & Initial Draft \\ \hline
+0.5 & 2024-11-15 & Hung-Wei Machine & Added Architecture \& Pipeline \\ \hline
+0.9 & 2024-12-10 & Hung-Wei Machine & Added Micro-CUDA ISA \\ \hline
+1.0 & 2025-12-16 & Agent & Formal Engineering Specification Release (Added Electrical Specs, ABI, Benchmarks) \\ \hline
+\end{tabular}
+\end{table}
+
+\section*{Glossary}
+\begin{itemize}
+    \item \textbf{SMSP}: Streaming Multiprocessor Sub-Partition. The fundamental execution unit containing one SIMD core.
+    \item \textbf{G-BUS}: Global Bus. 8-bit parallel bus connecting the Host (ESP32) and Device (RP2040) nodes.
+    \item \textbf{Micro-CUDA}: A subset of CUDA PTX ISA adapted for microcontroller constraints.
+    \item \textbf{Warp}: A group of 8 threads executed in lock-step.
+\end{itemize}

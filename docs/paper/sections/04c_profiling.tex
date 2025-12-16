@@ -1,0 +1,64 @@
+\section{Profiling and Debugging}
+
+Efficient debugging of parallel workloads often requires deep visibility into the execution state. To support this, the system implements an \textbf{Enhanced Trace} mechanism that streams cycle-accurate execution data in JSON format over the high-speed UART.
+
+\subsection{Enhanced Trace Format}
+
+The trace logger captures a comprehensive snapshot of the machine state for every instruction executed. As shown in Listing \ref{lst:json_trace}, the format is structured to facilitate offline analysis and visualization.
+
+\begin{lstlisting}[caption={Example JSON Trace Record}, label={lst:json_trace}, basicstyle=\ttfamily\scriptsize]
+{
+  "cycle": 152,
+  "pc": 12,
+  "instruction": "0x11040203",
+  "asm": "IADD R4, R2, R3",
+  "exec_time_us": 125,
+  "hw_ctx": {
+    "sm_id": 0,
+    "warp_id": 0,
+    "lane_id": 0,
+    "active_mask": "0xFF"
+  },
+  "perf": {
+    "latency": 1,
+    "stall_cycles": 0,
+    "stall_reason": "NONE",
+    "pipe_stage": "WRITEBACK"
+  },
+  "lanes": [
+    {
+      "lane_id": 0,
+      "R": [5, 3, 8, ... ]  // Full Register Dump
+    }
+  ]
+}
+\end{lstlisting}
+
+\subsection{Key Features}
+
+\subsubsection{Hardware Context}
+The \texttt{hw\_ctx} object encapsulates the SIMT topology, providing the specific Streaming Multiprocessor (SM), Warp, and Lane ID for the instruction. The \texttt{active\_mask} reveals thread divergence handling.
+
+\subsubsection{Performance Metrics}
+The \texttt{perf} object exposes the micro-architectural behavior:
+\begin{itemize}
+    \item \textbf{\texttt{exec\_time\_us}}: Real-time execution duration measured via high-resolution timers.
+    \item \textbf{\texttt{stall\_cycles}}: Pipeline bubbles caused by data dependencies or memory latency.
+    \item \textbf{\texttt{pipe\_stage}}: The current pipeline stage (e.g., DECODE, EXECUTE, WRITEBACK).
+    \item \textbf{\texttt{sync\_barrier}}: Automatic detection of \texttt{BAR.SYNC} operations.
+\end{itemize}
+
+\subsubsection{Register Inspection}
+Unlike traditional debuggers that inspect state at breakpoints, the Enhanced Trace dumps the complete register file (\texttt{R0-R23}) for all active lanes, enabling a "time-travel" debugging experience where variable values can be tracked historically.
+
+\subsection{Trace Usage}
+Tracing is enabled via the \texttt{trace:stream} command. Due to the high bandwidth requirements, it is strongly recommended to use Turbo Mode (460,800 baud) when this feature is active. The host-side Python client parses this stream to generate timeline visualizations similar to Nsight Compute.
+
+\subsection{Host-Side Visualization}
+The Python client parses the JSON stream to generate interactive timelines.
+
+\subsubsection{Warp Divergence Analysis}
+The visualizer reconstructs the execution path of each warp, highlighting divergent branches (where \texttt{active\_mask != 0xFF}) in red. This allows developers to identify inefficient kernels that suffer from serialization.
+
+\subsubsection{Pipeline Stall Visualization}
+By tracking \texttt{stall\_cycles}, the tool identifies memory bottlenecks. A heatmap view correlates high latency instructions with specific VRAM banks, aiding in memory layout optimization.

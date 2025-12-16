@@ -1,0 +1,96 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage[hidelinks]{hyperref}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric, shapes.multipart, arrows.meta, positioning, calc, fit, backgrounds, shadows, decorations.pathreplacing, matrix, patterns}
+
+% Color Definitions for Architecture Diagram
+\definecolor{host_bg}{RGB}{255,250,230}
+\definecolor{host_border}{RGB}{200,150,50}
+\definecolor{l1_bg}{RGB}{230,240,255}
+\definecolor{l1_border}{RGB}{50,100,200}
+\definecolor{l1_inner_bg}{RGB}{245,250,255}
+\definecolor{l2_bg}{RGB}{230,255,230}
+\definecolor{l2_border}{RGB}{50,150,50}
+\definecolor{l2_inner_bg}{RGB}{245,255,245}
+\definecolor{l3_bg}{RGB}{255,230,230}
+\definecolor{l3_border}{RGB}{200,50,50}
+\definecolor{l3_inner_bg}{RGB}{255,245,245}
+\definecolor{bus_color}{RGB}{80,80,80}
+\definecolor{warp_text}{RGB}{100,0,100}
+
+% Syntax Highlighting for Micro-CUDA Assembly
+\lstdefinelanguage{MicroCUDA}{
+  keywords={LDL, STL, IADD, IMUL, MOV, EXIT, BAR.SYNC, BRA, S2R, STX, LDX, LDG, STG, LDS, FADD, FSUB, FMUL, FFMA, SFU, ISETP, BR},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywords={R0, R1, R2, R3, R10, R11, R12, R20, R21, R31, F0, F1, P0, P1, SR_LANEID, SR_TID},
+  ndkeywordstyle=\color{purple}\bfseries,
+  identifierstyle=\color{black},
+  sensitive=false,
+  comment=[l]{;},
+  commentstyle=\color{gray}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  morestring=[b]',
+  morestring=[b]"
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  language=MicroCUDA,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  captionpos=b,
+  breaklines=true
+}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Micro-CUDA: A SIMT Architecture Implementation on ESP32 Dual-Core System}
+
+\author{\IEEEauthorblockN{Hung-Wei Machine}
+\IEEEauthorblockA{\textit{Department of Antigravity Engineering} \\
+\textit{Deepmind Research}\\
+Taipei, Taiwan \\
+agent@deepmind.com}
+}
+
+\maketitle
+\tableofcontents
+
+\input{sections/00_abstract}
+\input{sections/00b_revision_history}
+\input{sections/01_introduction}
+\input{sections/02_architecture}
+\input{sections/02b_interconnect}
+\input{sections/02c_bus_protocol}
+\input{sections/02d_hardware_topology}
+\input{sections/02e_electrical_specs}
+\input{sections/03_isa}
+\input{sections/03b_abi}
+\input{sections/04_implementation}
+\input{sections/04b_host_interface}
+\input{sections/04d_compiler}
+\input{sections/04c_profiling}
+\input{sections/05_case_study}
+\input{sections/05b_benchmarks}
+\input{sections/06_conclusion}
+
+\begin{thebibliography}{00}
+\bibitem{b1} NVIDIA, ``NVIDIA CUDA C++ Programming Guide,'' 2024.
+\bibitem{b2} Espressif Systems, ``ESP32 Technical Reference Manual,'' 2023.
+\bibitem{b3} Lindholm et al., ``NVIDIA Tesla: A Unified Graphics and Computing Architecture,'' IEEE Micro, 2008.
+\end{thebibliography}
+
+\end{document}
