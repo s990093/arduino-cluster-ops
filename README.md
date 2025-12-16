@@ -10,9 +10,19 @@
 
 ## 🏗️ Architecture: The Micro-SM
 
-The system implements a classic **Front-End / Back-End** GPU architectures, using the ESP32's dual cores to emulate a discrete GPU Streaming Multiprocessor.
+The system implements a classic **Front-End / Back-End** GPU architecture. The ESP32's dual cores are utilized to decouple instruction scheduling from parallel execution, emulating the internal structure of a discrete GPU Streaming Multiprocessor.
 
-![Micro-CUDA Architecture](docs/images/arch_diag.png)
+### 1. Internal Micro-Architecture (ESP32-S3)
+
+Host commands drive **Core 0** (Front-End), which fetches instructions and dispatches them via a hardware queue to the **Core 1** (SIMD Engine).
+
+![ESP32 Micro-Architecture](docs/images/micro_arch_diag.png)
+
+### 2. SIMT Lane Architecture (Execution Core)
+
+Each SIMD lane operates in lockstep, possessing its own register context and execution units.
+
+![SIMT Lane Architecture](docs/images/arch_diag.png)
 
 ### Key Components
 
