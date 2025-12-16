@@ -1,38 +1,57 @@
-# System Architecture
+# System Architecture Deep Dive
 
-## Overview
+## Cluster Hierarchy
 
-The Micro-CUDA architecture transforms the ESP32-S3 into a customized GPU-like accelerator. It uses **Core 0** for instruction scheduling (Front-End) and **Core 1** for parallel SIMT execution (Back-End).
+The system defines a strict hierarchical topology physically emulating the CUDA execution model.
 
-## Core 0: The Front-End Scheduler
+| Layer  | Device     | CUDA Equivalent | Role                                   |
+| :----- | :--------- | :-------------- | :------------------------------------- |
+| **L0** | Host PC    | Host CPU        | PyTorch Grid Tiling & compilation.     |
+| **L1** | AMB82-Mini | GPU Master      | Central controller & DMA Engine.       |
+| **L2** | ESP32-S3   | SM              | Warp Scheduler & Instruction Dispatch. |
+| **L3** | RP2040     | CUDA Cores      | Parallel ALU & Execution Units.        |
 
-Core 0 acts as the "Grid Master" or Warp Scheduler. It is responsible for:
+## Layer 1: GPU Master (AMB82-Mini)
 
-- Fetching instructions from the Instruction Memory (IMEM).
-- Decoding 32-bit opcodes.
-- Handling control flow instructions like Branches (`BRA`, `BR.Z`) and Loops.
-- managing synchronization barriers (`BAR.SYNC`).
-- Dispatching safe, executable instruction bundles to the execution engine.
+The AMB82-Mini acts as the cluster controller. It implements an **Asymmetric Multi-Processing (AMP)** model.
 
-## Core 1: The SIMD Back-End
+- **DMA as Virtual Core**: The DMA engine drives the Global G-BUS, generating `CS` and `WR` signals automatically from a RAM buffer. This frees the Cortex-M33 CPU to handle high-level logic.
+- **Context Queue**: Manages task priority and "Grid Launch" events similar to a GPU command processor.
 
-Core 1 is a heavily optimized software-defined **SIMD Engine**. It emulates 8 parallel "lanes" (Threads).
+## Layer 2: Streaming Multiprocessor (ESP32-S3)
 
-- **Lockstep Execution**: All 8 lanes execute the exact same instruction at the same time.
-- **Divergence Handling**: If lanes diverge (e.g., `if (lane_id < 4)`), the hardware (emulated) handles masking automatically using Predicate registers (`P0-P7`).
+The ESP32-S3 mimics a discrete GPU Streaming Multiprocessor (SM) using its dual-core architecture.
 
-## Register File Organization
+![ESP32 Internal Arch](/images/micro_arch_diag.png)
 
-Each lane has its own independent register set:
+### Core 0 (Receiver / Front-End)
 
-| Type     | Name   | Count | Width  | Description                               |
-| :------- | :----- | :---- | :----- | :---------------------------------------- |
-| **GPR**  | R0-R31 | 32    | 32-bit | General Purpose Integers / Addresses      |
-| **FPR**  | F0-F31 | 32    | 32-bit | IEEE 754 Floating Point / BFloat16        |
-| **PRED** | P0-P7  | 8     | 1-bit  | Predicate flags for conditional execution |
+Dedicated to high-throughput I/O.
 
-## Memory Hierarchy
+1.  **Listen**: Monitors Global G-BUS for incoming instruction packets.
+2.  **Filter**: Uses Sideband Metadata (`MD0-MD3`) to accept/reject packets designated for this SM.
+3.  **Queue**: Pushes valid tasks into a **Ring Buffer**.
 
-1.  **Global Memory (VRAM)**: Shared 40KB - 1MB PSRAM/SRAM region accessible by all lanes.
-2.  **Shared Memory (LDS/STS)**: Fast, low-latency scratchpad memory for inter-lane communication.
-3.  **Instruction Memory (IMEM)**: Holds the kernel binaries uploaded from the host.
+### Core 1 (Scheduler / Back-End)
+
+Implements the Warp Scheduler logic.
+
+1.  **Fetch**: Pulls tasks from the Ring Buffer.
+2.  **Reorder**: A simplified Reorder Queue hides memory latency.
+3.  **Dispatch**: Broadcasts instructions to local RP2040 cores via the **Local G-BUS**.
+
+## Layer 3: SMSP Cores (RP2040)
+
+The RP2040 represents the "CUDA Cores".
+
+- **PIO State Machine**: A custom `parallel_8080_rx` PIO program ingests 32-bit instructions at 50 MB/s without CPU intervention.
+- **Double Buffered Execution**: While the PIO fills the RX FIFO, the Cortex-M0+ executes the previous batch of instructions.
+
+## Kernel Launch Flow
+
+1.  **Config**: AMB82 broadcasts kernel dimensions and parameters.
+2.  **Broadcast**: Instructions are streamed to all ESP32s.
+3.  **Sync**: A dedicated **Global Barrier** (`SYNC_TRIG`) line is pulled LOW.
+4.  **Execute**: When all nodes release the barrier, execution starts simultaneously (<1µs jitter).
+
+![Execution Mapping](/images/execution_mapping_placeholder.png)

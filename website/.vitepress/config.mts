@@ -26,20 +26,19 @@ export default defineConfig({
           { text: 'Getting Started', link: '/guide/getting-started' }
         ]
       },
-      {
-        text: 'Architecture',
-        items: [
-          { text: 'System Diagram', link: '/guide/architecture' },
-          { text: 'SIMD Lanes', link: '/guide/simd-lanes' }
-        ]
-      },
-      {
-        text: 'References',
-        items: [
-          { text: 'ISA Specification', link: '/guide/isa' },
-          { text: 'Python SDK', link: '/guide/sdk' }
-        ]
-      }
+        {
+          text: 'Guides',
+          items: [
+            { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'Architecture Reference', link: '/guide/architecture' },
+            { text: 'Hardware & Topology', link: '/guide/hardware' },
+            { text: 'Software Internals', link: '/guide/software' },
+            { text: 'ISA Specification', link: '/guide/isa' },
+            { text: 'SIMD Lanes', link: '/guide/simd-lanes' },
+            { text: 'Python SDK', link: '/guide/sdk' },
+            { text: 'Benchmarks', link: '/guide/benchmarks' }
+          ]
+        }
     ],
 
     socialLinks: [
