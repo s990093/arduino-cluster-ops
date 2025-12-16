@@ -4,91 +4,50 @@
 [![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32%20S3-blue.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Language: Python/C++](https://img.shields.io/badge/Language-Python%20%7C%20C%2B%2B-green.svg)]()
 
-**Micro-CUDA** is a research project establishing a true **SIMT (Single Instruction, Multiple Threads)** architecture on standard dual-core microcontrollers (ESP32-S3). It enables CUDA-like parallel programming, BFloat16 tensor operations, and warp scheduling without requiring an actual GPU.
+**Micro-CUDA** is a research project establishing a true **SIMT (Single Instruction, Multiple Threads)** architecture on standard dual-core microcontrollers. It transforms the ESP32-S3 into a **Micro-SM (Streaming Multiprocessor)**, enabling CUDA-like parallel programming, BFloat16 tensor operations, and warp scheduling without requiring an actual GPU.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture: The Micro-SM
 
-The system implements a classic **Front-End / Back-End** GPU architecture using the ESP32's dual cores:
+The system implements a classic **Front-End / Back-End** GPU architectures, using the ESP32's dual cores to emulate a discrete GPU Streaming Multiprocessor.
 
-```mermaid
-graph TD
-    User[Host PC / Python] -->|UART Command| Core0
-
-    subgraph ESP32 ["ESP32 Micro-SM (Streaming Multiprocessor)"]
-        direction TB
-
-        subgraph FrontEnd ["Core 0: Warp Scheduler"]
-            Fetch[Instruction Fetch]
-            Decode[Decode & Issue]
-            PC[PC Control]
-            Trace[Trace Unit]
-        end
-
-        subgraph Interconnect ["Sync Queue"]
-            Q_Inst[Instruction Queue]
-            Q_Ack[Completion Queue]
-        end
-
-        subgraph BackEnd ["Core 1: SIMD Engine (8 Lanes)"]
-            direction TB
-            subgraph Exec ["Execution Units"]
-                ALU_INT[Integer ALU]
-                ALU_BF16[BF16 Tensor Core]
-                SFU[Special Function Unit]
-            end
-
-            subgraph Regs ["Register File (Per Lane)"]
-                R["R0-R31 (Int32)"]
-                F["F0-F31 (FP32)"]
-                P["P0-P7 (Pred)"]
-            end
-
-            subgraph MEM ["Load/Store Unit"]
-                LSU[LSU]
-            end
-        end
-
-        Fetch --> Decode --> Q_Inst
-        Q_Inst --> Exec
-        Exec --> Regs
-        Exec --> LSU
-        LSU --> Q_Ack
-        Q_Ack --> Trace
-    end
-```
+![Micro-CUDA Architecture](docs/images/arch_diag.png)
 
 ### Key Components
 
-1.  **Grid Master (Host)**: Python-based host that manages kernels, memory (`malloc`, `memcpy`), and launches grids.
-2.  **Warp Scheduler (Core 0)**: Fetches instructions, handles control flow (branching/looping), and dispatches warps.
-3.  **SIMD Engine (Core 1)**: An 8-lane lockstep execution engine. Each lane has its own register file (R32/F32/P8) but shares the instruction stream.
+1.  **Front-End (Core 0 - Warp Scheduler)**:
+
+    - Fetches 32-bit instructions from the instruction buffer.
+    - Handles control flow (Branch, Loop, Yield).
+    - Dispatches active warps to the execution engine via a hardware queue.
+
+2.  **Back-End (Core 1 - SIMD Engine)**:
+    - **8-Lane SIMT Execution**: Executes the same instruction across 8 data lanes in lockstep.
+    - **Register File**: Each lane possesses its own localized register bank (R0-R31, F0-F31, P0-P7).
+    - **Tensor Core**: Integrated support for **Packed BFloat16** matrix operations (`BFMA`, `CVT`).
+    - **SFU**: Special Function Unit for hardware-accelerated `EXP2`, `RSQRT`, and `SIN/COS` (RoPE).
 
 ---
 
-## ⚡ Micro-CUDA ISA v2.0 specification
+## ⚡ Micro-CUDA ISA v2.0 Specification
 
-The ISA is a 32-bit RISC-style instruction set optimized for deep learning.
+The ISA is a 32-bit RISC-style instruction set optimized for deep learning and tensor math. It is fully described in the [Research Paper](docs/paper/main.pdf).
 
 ### Instruction Format (32-bit)
 
-| Bit Range | Field        | Description                                |
-| :-------- | :----------- | :----------------------------------------- |
-| `[31:26]` | **OPCODE**   | 6-bit Operation Code (64 instructions max) |
-| `[25:21]` | **DEST**     | Destination Register (Rd)                  |
-| `[20:16]` | **SRC1**     | Source Register 1 (Ra)                     |
-| `[15:11]` | **SRC2**     | Source Register 2 (Rb) or High bits of Imm |
-| `[10:0]`  | **IMM/Func** | Immediate value or Extended Function bits  |
+![Instruction Encoding](docs/images/enc_diag.png)
 
 ### Instruction Groups
 
-1.  **System Control (0x00-0x0F)**: `EXIT`, `NOP`, `BRA` (Branch), `WAIT` (Sync)
-2.  **Integer Arithmetic (0x10-0x1F)**: `IADD`, `ISUB`, `IMUL`, `ISETP` (Set Predicate)
-3.  **AI & Data Conversion (0x20-0x2F)**: `CVT.BF16`, `PACK2`, `BFADD2`, `BFMUL2` (Packed BFloat16)
-4.  **Floating Point (0x30-0x3F)**: `FADD`, `FMUL`, `FMA` (Fused Multiply-Add)
-5.  **Special Functions (SFU) (0x40-0x4F)**: `RSQRT` (Fast Inverse Sqrt), `SIN`, `COS`, `EXP2`, `LOG2`
-6.  **Memory Operations (0x50-0x5F)**: `LDG` (Global Load), `STG` (Global Store), `LDS` (Shared Load)
+| Group    | Functionality            | Examples                                                  |
+| :------- | :----------------------- | :-------------------------------------------------------- |
+| **0x00** | **System Control**       | `EXIT`, `NOP`, `BRA` (Branch), `WAIT` (Sync)              |
+| **0x10** | **Integer ALU**          | `IADD`, `ISUB`, `IMUL`, `ISETP` (Set Predicate)           |
+| **0x20** | **AI & Tensor**          | `CVT.BF16`, `PACK2`, `BFMA2` (BFloat16 FMA)               |
+| **0x30** | **Floating Point**       | `FADD`, `FMUL`, `FMA` (Fused Multiply-Add)                |
+| **0x40** | **SFU (Transcendental)** | `RSQRT`, `SIN`, `COS`, `EXP2`, `LOG2`                     |
+| **0x50** | **Memory (LSU)**         | `LDG` (Global Load), `STG` (Global Store), `LDS` (Shared) |
 
 ---
 
@@ -138,7 +97,7 @@ python hello_cuda.py
 
 Detailed documentation and research papers are available in the `docs/` directory:
 
-- 📄 **[Research Paper (PDF)](docs/paper/main.pdf)**: complete academic paper detailing the architecture, ISA, and performance benchmarks.
+- 📄 **[Research Paper (PDF)](docs/paper/main.pdf)**: Complete academic paper detailing the architecture, ISA, and performance benchmarks.
 - 📖 **[ISA Reference](docs/paper/sections/03_isa.tex)**: The LaTeX source for the ISA specification.
 - 🛠️ **[Tools Guide](docs/README_V2.md)**: Detailed usage guide for the Python SDK, Profiler, and Tracer.
 - 🧠 **[SIMD Lane Guide](docs/SIMD_LANE_GUIDE.md)**: Deep dive into the 8-lane SIMD execution model.
