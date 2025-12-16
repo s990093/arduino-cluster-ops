@@ -1,0 +1,75 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}System Architecture}{1}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Cluster Hierarchy}{1}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}1}Layer 0: Host System (Grid)}{1}{subsubsection.2.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}2}Layer 1: GPU Master (AMB82-Mini)}{1}{subsubsection.2.1.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads).}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:full_architecture}{{1}{2}{Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads)}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}3}Layer 2: Streaming Multiprocessors (ESP32-S3)}{2}{subsubsection.2.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}4}Layer 3: SMSP / Threads (RP2040)}{2}{subsubsection.2.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}ESP32-S3 Micro-Architecture (Node Detail)}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM.}}{3}{figure.2}\protected@file@percent }
+\newlabel{fig:vm_arch}{{2}{3}{ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Scalability and Multi-Chip Integration}{3}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}1}Inter-Node Communication}{3}{subsubsection.2.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}2}Global Synchronization}{3}{subsubsection.2.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Layer 1 Detail: AMB82-Mini (Master Controller)}{3}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor}{3}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-F}}Hardware Specifications}{3}{subsection.2.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-F}1}AMB82-Mini (GPU Grid Master)}{3}{subsubsection.2.6.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.}}{4}{figure.3}\protected@file@percent }
+\newlabel{fig:layer1_arch}{{3}{4}{Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-F}2}Comparison: RP2040 vs. ESP32}{4}{subsubsection.2.6.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Hardware Feature Comparison: RP2040 vs. ESP32}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:chip_comparison}{{I}{4}{Hardware Feature Comparison: RP2040 vs. ESP32}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Inter-Core Communication Protocol}{4}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Communication Mechanism}{4}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Instruction Batching}{4}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Synchronization Sequence}{4}{subsection.3.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.}}{5}{figure.4}\protected@file@percent }
+\newlabel{fig:layer2_arch}{{4}{5}{Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM}{figure.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Synchronization Sequence Diagram. Normal instructions are pipelined via batches. Control flow instructions (e.g., BR.Z) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate.}}{5}{figure.5}\protected@file@percent }
+\newlabel{fig:seq}{{5}{5}{Synchronization Sequence Diagram. Normal instructions are pipelined via batches. Control flow instructions (e.g., BR.Z) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate}{figure.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}1}Handling Divergence}{5}{subsubsection.3.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Physical Bus Interface Specification}{5}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Interface Overview}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Physical Layer Pinout}{6}{subsection.4.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces 8-bit Parallel Bus Pinout Definition}}{6}{table.2}\protected@file@percent }
+\newlabel{tab:bus_pinout}{{II}{6}{8-bit Parallel Bus Pinout Definition}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Word Transmission Protocol}{6}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}1}Byte Ordering (Endianness)}{6}{subsubsection.4.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}2}Burst Transmission Mode}{6}{subsubsection.4.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Timing Characteristics}{6}{subsection.4.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Bus Timing Diagram. Data is stable during the low phase of \texttt  {WR\#}, and the Slave latches data on the rising edge. A 20ns cycle period yields 50 MB/s throughput.}}{6}{figure.6}\protected@file@percent }
+\newlabel{fig:bus_timing}{{6}{6}{Bus Timing Diagram. Data is stable during the low phase of \texttt {WR\#}, and the Slave latches data on the rising edge. A 20ns cycle period yields 50 MB/s throughput}{figure.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Instruction Dispatch Sequence}{6}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Hardware Implementation Notes}{6}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}1}RP2040 Reception (PIO State Machine)}{6}{subsubsection.4.6.1}\protected@file@percent }
+\newlabel{lst:pio_rx}{{1}{6}{RP2040 PIO Program for 8080 Bus Reception}{lstlisting.1}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}RP2040 PIO Program for 8080 Bus Reception}{6}{lstlisting.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}2}Signal Integrity Considerations}{6}{subsubsection.4.6.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Instruction Dispatch Sequence. The Master (ESP32) transmits a 32-bit HMMA instruction as four sequential bytes over the 8-bit bus. The Slave (RP2040) uses PIO to reassemble the instruction and execute upon SYNC trigger.}}{7}{figure.7}\protected@file@percent }
+\newlabel{fig:bus_sequence}{{7}{7}{Instruction Dispatch Sequence. The Master (ESP32) transmits a 32-bit HMMA instruction as four sequential bytes over the 8-bit bus. The Slave (RP2040) uses PIO to reassemble the instruction and execute upon SYNC trigger}{figure.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-G}}Performance Analysis}{7}{subsection.4.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Hardware Pipeline and Topology}{7}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Split-Bus Architecture}{8}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Pin Mapping Strategy}{8}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}1}Layer 1: AMB82-Mini (GPU Master)}{8}{subsubsection.5.2.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Global G-BUS Pinout (AMB82-Mini)}}{8}{table.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}2}Layer 2: ESP32-S3 (Streaming Multiprocessor)}{8}{subsubsection.5.2.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces ESP32-S3 Interface Mapping}}{8}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}3}Layer 3: RP2040 (SMSP Cores)}{8}{subsubsection.5.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}System Corner Diagram}{8}{subsection.5.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores.}}{8}{figure.8}\protected@file@percent }
+\newlabel{fig:high_level_pipeline}{{8}{8}{High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores}{figure.8}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}1}High-Level Data Flow}{8}{figure.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}2}SMSP Fan-out View}{8}{subsubsection.5.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus.}}{8}{figure.9}\protected@file@percent }
+\newlabel{fig:smsp_fanout}{{9}{8}{SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus}{figure.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Physical Implementation Notes}{9}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Pipeline Timing Analysis}{9}{subsection.5.5}\protected@file@percent }
+\@writefile{toc}{\contentslin

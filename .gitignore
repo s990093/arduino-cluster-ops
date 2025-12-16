@@ -1,41 +1,47 @@
-# Prerequisites
-*.d
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+node_modules
+dist
+dist-ssr
+*.local
 
-# Precompiled Headers
-*.gch
-*.pch
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# Linker files
-*.ilk
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
 
-# Debugger Files
-*.pdb
+# Build Artifacts
+build/
+*.bin
+*.elf
+*.map
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Data Outputs (Keep structure but ignore generated files)
+data/outputs/*
+data/traces/*
+!data/outputs/.gitkeep
+!data/traces/.gitkeep
 
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
+# Next.js
+.next/
+node_modules/
