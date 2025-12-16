@@ -1,0 +1,17 @@
+{
+  "name": "micro-cuda-docs",
+  "version": "1.0.0",
+  "description": "Documentation for Micro-CUDA: SIMT Architecture on ESP32",
+  "main": "index.js",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "keywords": [],
+  "author": "Hung-Wei Machine",
+  "license": "MIT",
+  "devDependencies": {
+    "vitepress": "^1.0.0"
+  }
+}
