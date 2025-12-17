@@ -13,29 +13,25 @@ export default defineConfig({
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Guide', link: '/guide/introduction' },
       { text: 'ISA Reference', link: '/guide/isa' },
       { text: 'Paper', link: 'https://github.com/s990093/arduino-cluster-ops/blob/main/docs/paper/main.pdf' }
     ],
 
     sidebar: [
       {
-        text: 'Introduction',
+        text: 'Guide',
         items: [
-          { text: 'What is Micro-CUDA?', link: '/' },
-          { text: 'Getting Started', link: '/guide/getting-started' }
+          { text: 'Introduction', link: '/guide/introduction' },
+          { text: 'System Architecture', link: '/guide/architecture' },
+          { text: 'Hardware Implementation', link: '/guide/hardware-implementation' },
+          { text: 'Interconnect & Synchronization', link: '/guide/interconnect' },
+          { text: 'ISA Reference', link: '/guide/isa' },
+          { text: 'Software Stack', link: '/guide/software' },
+          { text: 'Evaluation', link: '/guide/evaluation' },
+          { text: 'Conclusion', link: '/guide/conclusion' }
         ]
-      },
-        {
-          text: 'Guides',
-          items: [
-            { text: 'Getting Started', link: '/guide/getting-started' },
-            { text: 'Architecture Reference', link: '/guide/architecture' },
-            { text: 'ISA Specification', link: '/guide/isa' },
-            { text: 'Python SDK', link: '/guide/sdk' },
-            { text: 'Benchmarks', link: '/guide/benchmarks' }
-          ]
-        }
+      }
     ],
 
     socialLinks: [

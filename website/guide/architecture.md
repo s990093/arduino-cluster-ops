@@ -1,146 +1,97 @@
-# System Architecture Deep Dive
+# System Architecture
+
+The system architecture defines a strict hierarchical topology, designed to physically emulate the CUDA execution model. Data flows from the high-level software abstraction on the host down to bit-level arithmetic operations in the distributed cores.
+
+## Execution Model (SIMT)
+
+The core execution model follows a Single-Instruction Multiple-Thread (SIMT) paradigm, relying on a "Broadcast-and-Mask" mechanism.
+
+> [!NOTE] > **SIMT Execution Swimlane**: The diagram illustrates the "Thread Allocation" mechanism. The ESP32 scheduler broadcasts a single `LDL` instruction. Each RP2040 worker (Lane) simultaneously receives the opcode but accesses disjoint memory addresses (Base + LaneID \* 4) derived from its local `SR_LANEID` register.
 
 ## Cluster Hierarchy
 
-The system defines a strict hierarchical topology physically emulating the CUDA execution model.
+### Layer 0: Host System (Grid)
 
-| Layer  | Device     | CUDA Equivalent | Role                                   |
-| :----- | :--------- | :-------------- | :------------------------------------- |
-| **L0** | Host PC    | Host CPU        | PyTorch Grid Tiling & compilation.     |
-| **L1** | AMB82-Mini | GPU Master      | Central controller & DMA Engine.       |
-| **L2** | ESP32-S3   | SM              | Warp Scheduler & Instruction Dispatch. |
-| **L3** | RP2040     | CUDA Cores      | Parallel ALU & Execution Units.        |
+The host PC utilizes PyTorch to define the computational graph. It performs **Grid Tiling**, breaking large tensors into smaller chunks that fit the SRAM constraints of the microcontroller network. These tiles are flattened into a serial stream.
 
-## Layer 1: GPU Master (AMB82-Mini)
+### Layer 1: GPU Master (AMB82-Mini)
 
-The AMB82-Mini acts as the cluster controller. It implements an **Asymmetric Multi-Processing (AMP)** model.
+This layer acts as the centralized controller. It features an ARM Cortex-M33 core.
 
-- **DMA as Virtual Core**: The DMA engine drives the Global G-BUS, generating `CS` and `WR` signals automatically from a RAM buffer. This frees the Cortex-M33 CPU to handle high-level logic.
-- **Context Queue**: Manages task priority and "Grid Launch" events similar to a GPU command processor.
+- **DMA Engine:** The defining feature is the use of the DMA hardware as a "Virtual Second Core." It drives the 8080 parallel bus, generating Write (WR) and Chip Select (CS) signals automatically.
 
-## Layer 2: Streaming Multiprocessor (ESP32-S3)
+### Layer 2: Streaming Multiprocessors (ESP32-S3)
 
-The ESP32-S3 mimics a discrete GPU Streaming Multiprocessor (SM) using its dual-core architecture.
+The ESP32-S3 mimics a CUDA SM. It utilizes its dual-core architecture to decouple reception from scheduling. Core 0 fills a Ring Buffer from the Global Bus, while Core 1 reads from this buffer to schedule instructions for the downstream threads.
 
-![ESP32 Internal Arch](/images/micro_arch_diag.png)
+### Layer 3: SMSP / Threads (RP2040)
 
-```mermaid
-graph TD
-    User[Host PC / Python] -->|UART Command| Core0
+The RP2040 acts as the fundamental ALU. It uses its Programmable I/O (PIO) state machines to ingest instructions from the Local G-Bus, pushing them into a FIFO for executing.
 
-    subgraph ESP32 [Mini-SM]
-        subgraph FrontEnd ["Core 0: Front-End (Warp Scheduler)"]
-            Fetch[Instruction Fetch]
-            Decode[Decode & Issue]
-            PC[PC Control]
-            Trace[Trace Unit]
-        end
+## ESP32-S3 Micro-Architecture (Node Detail)
 
-        subgraph BackEnd ["Core 1: Back-End (SIMD Engine)"]
-            SIMD["8-Lane SIMD Execution Unit"]
-            RegFile["Register File (8x R[32])"]
-        end
+While the global architecture describes the cluster data flow, the specific implementation of the "Micro-CUDA" VM on the ESP32-S3 node mimics a discrete GPU's internal structure.
 
-        FrontEnd -->|Instructions (Queue)| BackEnd
-        BackEnd -->|Completion (Queue)| FrontEnd
-    end
-```
+> [!NOTE] > **ESP32-S3 Internal Micro-Architecture**: Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM.
 
-### Core 0 (Receiver / Front-End)
+1. **Core 0 (Warp Scheduler)**: Fetches instructions, handles PC control (Branching), and queues batches for execution.
+2. **Core 1 (SIMD Engine)**: Conceptually executes parallel lanes. Core 1 maintains 8 independent register contexts (Micro-CUDA VM mode) or drives external ALUs.
 
-Dedicated to high-throughput I/O.
+This dual-core split allows the "SM" to maintain high throughput by overlapping instruction fetch/decode (Core 0) with mathematical execution (Core 1).
 
-1.  **Listen**: Monitors Global G-BUS for incoming instruction packets.
-2.  **Filter**: Uses Sideband Metadata (`MD0-MD3`) to accept/reject packets designated for this SM.
-3.  **Queue**: Pushes valid tasks into a **Ring Buffer**.
+## Scalability and Multi-Chip Integration
 
-### Core 1 (Scheduler / Back-End)
+To scale beyond a single node, the architecture supports a hierarchical cluster topology.
 
-Implements the Warp Scheduler logic.
+### Inter-Node Communication
 
-1.  **Fetch**: Pulls tasks from the Ring Buffer.
-2.  **Reorder**: A simplified Reorder Queue hides memory latency.
-3.  **Dispatch**: Broadcasts instructions to local RP2040 cores via the **Local G-BUS**.
+Multiple ESP32-S3 nodes (Layer 2) are connected via a high-speed SPI bus (50 MHz) to a central master (FPGA or Gateway). This allows the host to broadcast kernels to the entire cluster or address specific nodes for task parallelism.
 
-## Layer 3: SMSP Cores (RP2040)
+### Global Synchronization
 
-The RP2040 represents the "CUDA Cores".
+To support multi-chip kernels (e.g., distributed matrix multiplication), a dedicated open-drain GPIO line acts as a wired-AND "Global Barrier". When a kernel reaches a global sync point, it pulls the line low. The line only returns high when all nodes have released it, ensuring <1µs synchronization latency across the cluster.
 
-- **PIO State Machine**: A custom `parallel_8080_rx` PIO program ingests 32-bit instructions at 50 MB/s without CPU intervention.
-- **Double Buffered Execution**: While the PIO fills the RX FIFO, the Cortex-M0+ executes the previous batch of instructions.
+## Layer 1 Detail: AMB82-Mini (Master Controller)
 
-## Kernel Launch Flow
+The AMB82-Mini serves as the high-level scheduler, implementing an Asymmetric Multi-Processing (AMP) model to manage the flow of data from the host to the distributed compute nodes.
 
-1.  **Config**: AMB82 broadcasts kernel dimensions and parameters.
-2.  **Broadcast**: Instructions are streamed to all ESP32s.
-3.  **Sync**: A dedicated **Global Barrier** (`SYNC_TRIG`) line is pulled LOW.
-4.  **Execute**: When all nodes release the barrier, execution starts simultaneously (<1µs jitter).
+> [!NOTE] > **Layer 1 AMP Architecture**: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.
 
-![Execution Mapping](/images/execution_mapping_placeholder.png)
+## Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor
 
-## Hardware Interface
+The ESP32-S3 functions as the critical Layer 2 _Streaming Multiprocessor (SM)_, bridging the high-bandwidth Global Bus and the localized execution threads.
 
-The system utilizes a **Dual-Port Split-Bus** design to enable a true pipeline, avoiding a shared bus bottleneck.
+> [!NOTE] > **Layer 2 Internal Architecture**: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.
 
-### Physical Bus Protocol
+The architecture adopts a heterogeneous dual-core strategy:
 
-We use a custom **8-bit Parallel Low-Latency Bus** (Intel 8080-style).
+- **Core 0 (Receiver)**: Dedicated to high-throughput I/O. It filters incoming packets from the Global Bus based on metadata sidebands (MD0-MD3), placing valid tasks into a FIFO Ring Buffer.
+- **Core 1 (Scheduler)**: Implements complex warp scheduling logic. It pulls tasks from the buffer, reorders them to hide memory latency (via Reorder Queue), and dispatches instruction packets to the localized worker threads via the Local G-Bus.
 
-- **Bandwidth**: ~50 MB/s (20ns cycle time)
-- **Voltage**: 3.3V CMOS
-- **Transmission**: Big-Endian, Burst Mode
+## Hardware Specifications
 
-| Signal   | Type    | Description                                 |
-| :------- | :------ | :------------------------------------------ |
-| `D[0:7]` | Data    | 8-bit bidirectional data bus                |
-| `CS#`    | Control | Chip Select (Active Low)                    |
-| `DC`     | Control | **Low**: Command / **High**: Data           |
-| `WR#`    | Clock   | Write Strobe (Slave latches on Rising Edge) |
-| `SYNC`   | Global  | **Warp Trigger** (Global Barrier Release)   |
+### AMB82-Mini (GPU Grid Master)
 
-### Pin Mapping (ESP32-S3)
+The AMB82-Mini serves as the cluster controller and edge computing node, providing the necessary computational power for coordination and AI acceleration.
 
-The ESP32-S3 acts as a router/scheduler, managing simultaneous RX (from Host) and TX (to SMSP Cores).
+- **MCU**: ARMv8-M (Cortex-M33), up to 500MHz. Optimized for high-speed control and coordination tasks within the cluster.
+- **NPU**: Intelligent Engine (0.4 TOPS). Supports efficient AI inference and accelerates edge neural networks.
+- **Memory**: Built-in DDR2 128MB + External 16MB SPI Nor Flash. Utilized as the primary buffer for the GPU Grid and for firmware storage.
+- **Peripherals Overview**:
+  - **GPIO**: Up to 23 pins.
+  - **PWM**: 8 channels.
+  - **UART**: 3 interfaces.
+  - **SPI**: 2 interfaces.
+  - **I2C**: 1 interface.
 
-#### Input Interface (Slave)
+### Comparison: RP2040 vs. ESP32
 
-| Signal          | Pin      | Function                     |
-| :-------------- | :------- | :--------------------------- |
-| `G_DATA_[0..7]` | GPIO 1-9 | Data Input (Skipping GPIO 3) |
-| `G_WR`          | GPIO 10  | Write Strobe                 |
-| `G_DC`          | GPIO 11  | Data/Command                 |
-
-#### Output Interface (Master)
-
-| Signal          | Pin        | Function           |
-| :-------------- | :--------- | :----------------- |
-| `L_DATA_[0..3]` | GPIO 15-18 | Low Nibble         |
-| `L_DATA_[4..7]` | GPIO 39-42 | High Nibble        |
-| `L_WR`          | GPIO 48    | Write Strobe       |
-| `SYNC_TRIG`     | GPIO 46    | **Global Barrier** |
-
-### Timing & Integrity
-
-- **Cycle Time**: 20 ns (50 MHz)
-- **Setup Time**: Data must be stable 5ns before `WR#` rising edge.
-- **Hold Time**: Data must be held 3ns after `WR#` rising edge.
-- **Requirements**: Matching trace lengths (±1mm) and a solid common ground plane.
-
-## Firmware Internals
-
-### Core Responsibilities
-
-- **Core 0 (Front-End)**: Handles Instruction Fetch, Decode, PC Control, and UART I/O.
-- **Core 1 (Back-End)**: Dedicated to the 8-Lane SIMD Execution Loop.
-- **Synchronization**: Uses FreeRTOS Queues for cycle-accurate lockstep execution (Issue -> Execute).
-
-### LZ4 Decompression Integration
-
-To accelerate kernel loading, the firmware integrates a lightweight LZ4 decompressor.
-
-1.  **Library**: Ported `lz4.c` / `lz4.h` (std C).
-2.  **Flow**:
-    - Host sends `load_imem_lz4 <size>`.
-    - Firmware allocates specialized buffer.
-    - Chunks are received and decompressed in-place into I-RAM.
-3.  **Performance**: Reduces kernel upload time by ~3-4x compared to raw binary transfer.
+| Feature            | RP2040                          | ESP32                                                          |
+| :----------------- | :------------------------------ | :------------------------------------------------------------- |
+| **CPU**            | Dual-core Cortex-M0+ @ 133MHz   | Xtensa Dual/Single-core 32-bit LX6, up to 240MHz               |
+| **SRAM / ROM**     | 264 KB, Independent Banks       | 320 KB RAM, 448 KB ROM                                         |
+| **Flash Memory**   | External QSPI Flash (Max 16 MB) | Supports SD/SDIO/MMC/EMMC Host, Built-in Flash varies by board |
+| **DMA Controller** | Yes                             | Yes                                                            |
+| **Interconnect**   | Fully Connected AHB             | Dedicated DMA Channels                                         |
+| **GPIO**           | 30 total, 4 Analog Inputs       | 34 Programmable GPIOs                                          |
+| **Internal Flash** | 2 MB (Typical external)         | 4 MB (Typical)                                                 |

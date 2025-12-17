@@ -1,0 +1,11 @@
+# Introduction
+
+As Deep Learning models like Transformers move to the edge, the need for efficient matrix operations on embedded devices grows. While high-end edge GPUs (e.g., NVIDIA Jetson) exist, there is a significant gap in enabling GPU-like programming models on ubiquitous, low-cost microcontrollers like the ESP32.
+
+Traditional Microcontroller Units (MCUs) operate on a SISD (Single Instruction Single Data) model. Emulating a GPU requires a fundamental architectural shift to SIMT (Single Instruction Multiple Threads). This paper proposes a novel approach to emulate a Streaming Multiprocessor (SM) using the asymmetric dual-core architecture of the ESP32.
+
+Our contributions are as follows:
+
+1. **Dual-Core Split Architecture**: We decouple control logic (Core 0) from execution logic (Core 1) to mimic the GPU Front-End/Back-End split, utilizing FreeRTOS queues for synchronization.
+2. **Micro-CUDA ISA v1.5**: We introduce a custom 32-bit instruction set supporting predicated execution, warp synchronization, and lane-based addressing, specifically designed for MCU constraints.
+3. **Virtual SIMD Engine**: A runtime environment on Core 1 that manages 8 virtual "lanes" with isolated register contexts, enabling true data parallelism.
