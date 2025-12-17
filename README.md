@@ -107,6 +107,7 @@ python hello_cuda.py
 
 Detailed documentation and research papers are available in the `docs/` directory:
 
+- 🌐 **[Online Documentation](https://s990093.github.io/arduino-cluster-ops/)**: Official guide and API reference.
 - 📄 **[Research Paper (PDF)](docs/paper/main.pdf)**: Complete academic paper detailing the architecture, ISA, and performance benchmarks.
 - 📖 **[ISA Reference](docs/paper/sections/03_isa.tex)**: The LaTeX source for the ISA specification.
 - 🛠️ **[Tools Guide](docs/README_V2.md)**: Detailed usage guide for the Python SDK, Profiler, and Tracer.
