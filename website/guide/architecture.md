@@ -8,7 +8,7 @@ The system architecture defines a strict hierarchical topology, designed to phys
 
 The core execution model follows a Single-Instruction Multiple-Thread (SIMT) paradigm, relying on a "Broadcast-and-Mask" mechanism.
 
-> [!NOTE] > **SIMT Execution Swimlane**: The diagram illustrates the "Thread Allocation" mechanism. The ESP32 scheduler broadcasts a single `LDL` instruction. Each RP2040 worker (Lane) simultaneously receives the opcode but accesses disjoint memory addresses (Base + LaneID \* 4) derived from its local `SR_LANEID` register.
+![SIMT Execution Swimlane](/assets/figures/simt_swimlane.png)
 
 ## Cluster Hierarchy
 
@@ -34,7 +34,7 @@ The RP2040 acts as the fundamental ALU. It uses its Programmable I/O (PIO) state
 
 While the global architecture describes the cluster data flow, the specific implementation of the "Micro-CUDA" VM on the ESP32-S3 node mimics a discrete GPU's internal structure.
 
-> [!NOTE] > **ESP32-S3 Internal Micro-Architecture**: Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM.
+![ESP32-S3 Internal Micro-Architecture](/assets/figures/micro_arch_diag.png)
 
 1. **Core 0 (Warp Scheduler)**: Fetches instructions, handles PC control (Branching), and queues batches for execution.
 2. **Core 1 (SIMD Engine)**: Conceptually executes parallel lanes. Core 1 maintains 8 independent register contexts (Micro-CUDA VM mode) or drives external ALUs.
@@ -57,8 +57,9 @@ To support multi-chip kernels (e.g., distributed matrix multiplication), a dedic
 
 The AMB82-Mini serves as the high-level scheduler, implementing an Asymmetric Multi-Processing (AMP) model to manage the flow of data from the host to the distributed compute nodes.
 
-> [!NOTE] ### Layer 1 AMP Architecture
-> The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.
+### Layer 1 AMP Architecture
+
+The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.
 
 ![Layer 1 AMP Architecture](/assets/figures/layer1_amp.png)
 
@@ -72,12 +73,28 @@ The following algorithm illustrates the Grid Dispatch and DMA Injection logic ru
 
 The ESP32-S3 functions as the critical Layer 2 _Streaming Multiprocessor (SM)_, bridging the high-bandwidth Global Bus and the localized execution threads.
 
-> [!NOTE] > **Layer 2 Internal Architecture**: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.
+### Layer 2 Internal Architecture
+
+The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.
+
+![Layer 2 Internal Architecture](/assets/figures/layer2_arch.png)
 
 The architecture adopts a heterogeneous dual-core strategy:
 
 - **Core 0 (Receiver)**: Dedicated to high-throughput I/O. It filters incoming packets from the Global Bus based on metadata sidebands (MD0-MD3), placing valid tasks into a FIFO Ring Buffer.
 - **Core 1 (Scheduler)**: Implements complex warp scheduling logic. It pulls tasks from the buffer, reorders them to hide memory latency (via Reorder Queue), and dispatches instruction packets to the localized worker threads via the Local G-Bus.
+
+### Warp Scheduler Algorithm
+
+The Warp Scheduler operates on a "Broadcast-and-Mask" principle to ensure strictly synchronized execution across distributed lanes:
+
+![Warp Scheduler Algorithm](/assets/figures/warp_sched_algo.png)
+
+### SIMT Execution Algorithm (Layer 3)
+
+The execution logic running on the RP2040 SMSP cores, depicting the Lane-Aware Load and Packed Arithmetic operations:
+
+![SIMT Execution Algorithm](/assets/figures/simt_exec_algo.png)
 
 ## Hardware Specifications
 

@@ -1,0 +1,56 @@
+\documentclass[preview,border=12pt]{standalone}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{varwidth}
+\usepackage{xcolor}
+
+\begin{document}
+\colorbox{white}{
+\begin{varwidth}{15cm}
+\textbf{Algorithm 3} SIMT Execution \& Lane Addressing (Running on RP2040)
+\vspace{2pt}
+\hrule height 0.8pt
+\vspace{2pt}
+\hrule height 0.4pt
+\begin{algorithmic}[1]
+\small
+\REQUIRE $FIFO_{rx}$: Instruction stream from PIO State Machine
+\REQUIRE $R_{file}$: Local Register File (R0-R31)
+\REQUIRE $SR_{lane}$: Hardwired Lane ID (0..7)
+\ENSURE $VRAM$: Local SRAM Bank
+\ENSURE $P_{out}$: Predicate Feedback (For Sync)
+
+\STATE \textbf{Start} PIO Program \texttt{parallel\_8080\_rx}
+
+\LOOP
+    \STATE \COMMENT{Step 1: Fetch (Blocking)}
+    \WHILE{$FIFO_{rx}$ is empty}
+        \STATE \textbf{Wait} \COMMENT{Cycle-accurate stall}
+    \ENDWHILE
+    \STATE $I_{inst} \leftarrow \text{Pop}(FIFO_{rx})$
+
+    \STATE \COMMENT{Step 2: Decode \& Address Calculation}
+    \STATE $Op \leftarrow \text{Opcode}(I_{inst})$
+
+    \IF{$Op == \text{LDL}$ (Lane-Aware Load)}
+        \STATE $Base \leftarrow R_{file}[\text{Src1}]$
+        \STATE $Offset \leftarrow SR_{lane} \times 4$
+        \STATE $Addr \leftarrow Base + Offset$ \COMMENT{Unique address per lane}
+        \STATE $R_{file}[\text{Dest}] \leftarrow VRAM[Addr]$
+
+    \ELSIF{$Op == \text{BFADD2}$ (Packed BF16)}
+        \STATE \COMMENT{SIMD2 Emulation on Cortex-M0+}
+        \STATE $R_{file}[\text{Dest}].L \leftarrow \text{SoftBF16Add}(R_{file}[\text{Src1}].L, R_{file}[\text{Src2}].L)$
+        \STATE $R_{file}[\text{Dest}].H \leftarrow \text{SoftBF16Add}(R_{file}[\text{Src1}].H, R_{file}[\text{Src2}].H)$
+
+    \ELSIF{$Op == \text{BR.Z}$ (Branch Sync)}
+        \STATE $Val \leftarrow \text{CheckPredicate}(P0)$
+        \STATE $\text{GPIO\_Write}(P_{out}, Val)$ \COMMENT{Feedback to ESP32}
+    \ENDIF
+\ENDLOOP
+\end{algorithmic}
+\hrule height 0.4pt
+\end{varwidth}
+}
+\end{document}

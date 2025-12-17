@@ -3,9 +3,13 @@
 \usepackage{algorithmic}
 \usepackage{amsmath}
 \usepackage{varwidth}
+\usepackage{xcolor}
 
 \begin{document}
-\begin{varwidth}{15cm} % Set a reasonable width
+% Wrap in fbox or just rely on pagecolor. Standalone might crop pagecolor.
+% Using minipage with colorbox is safer for standalone preview.
+\colorbox{white}{
+\begin{varwidth}{15cm}
 \textbf{Algorithm 1} Grid Dispatch \& DMA Injection (Running on AMB82-Mini)
 \vspace{2pt}
 \hrule height 0.8pt
@@ -36,11 +40,8 @@
     \STATE $\text{DMA\_Start}()$ \COMMENT{Drives 8080 Bus}
 
     \STATE \textbf{Wait} for $DMA_{IRQ}$ (Transfer Complete)
-\ENDFOR
-
-\STATE \COMMENT{Step 4: Kernel Launch}
-\STATE $\text{SendPacket}(\text{CMD\_LAUNCH})$
 \end{algorithmic}
 \hrule height 0.4pt
 \end{varwidth}
+}
 \end{document}

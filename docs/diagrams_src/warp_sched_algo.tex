@@ -1,0 +1,65 @@
+\documentclass[preview,border=12pt]{standalone}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{varwidth}
+\usepackage{xcolor}
+
+\begin{document}
+\colorbox{white}{
+\begin{varwidth}{15cm}
+\textbf{Algorithm 2} Micro-CUDA Warp Scheduler (Running on ESP32 Core 1)
+\vspace{2pt}
+\hrule height 0.8pt
+\vspace{2pt}
+\hrule height 0.4pt
+\begin{algorithmic}[1]
+\small
+\REQUIRE $Q_{in}$: Instruction Batch Queue from Core 0
+\REQUIRE $M_{active}$: Active Lane Mask (Bitmask)
+\ENSURE $G_{bus}$: 8-bit Parallel Bus Signals
+
+\STATE \textbf{Initialize} $PC \leftarrow 0$, $M_{active} \leftarrow \text{0xFF}$
+
+\LOOP
+    \IF{$Q_{in}$ is empty}
+        \STATE Wait (Yield to FreeRTOS)
+        \STATE \textbf{continue}
+    \ENDIF
+
+    \STATE $I_{batch} \leftarrow \text{Pop}(Q_{in})$ \COMMENT{Fetch batch to hide latency}
+
+    \FORALL{$I_{current}$ in $I_{batch}$}
+        \STATE \COMMENT{Phase 1: Check Execution Mask}
+        \IF{$M_{active} == 0$}
+            \STATE \textbf{continue} \COMMENT{Skip if all threads inactive}
+        \ENDIF
+
+        \STATE \COMMENT{Phase 2: Instruction Dispatch (Broadcast)}
+        \STATE $\text{DriveBus}(G_{bus}, \text{Opcode}(I_{current}))$
+        \STATE $\text{DriveBus}(G_{bus}, \text{Operands}(I_{current}))$
+        \STATE $\text{PulseSignal}(\text{WR\#})$ \COMMENT{Trigger RP2040 PIO RX}
+
+        \STATE \COMMENT{Phase 3: Handling Divergence}
+        \IF{$\text{IsControlFlow}(I_{current})$}
+            \STATE $\text{SendSignal}(\text{SYNC\_REQ})$
+            \STATE $P_{feedback} \leftarrow \text{WaitFeedback}(Q_{feedback})$
+            
+            \IF{$\text{Opcode}(I_{current}) == \text{BR.Z}$}
+                \STATE $M_{active} \leftarrow \text{UpdateDivergenceMask}(M_{active}, P_{feedback})$
+                \IF{$\text{EvaluateBranch}(P_{feedback})$}
+                    \STATE $PC \leftarrow \text{TargetAddress}(I_{current})$
+                    \STATE Flush $I_{batch}$
+                    \STATE \textbf{break}
+                \ENDIF
+            \ENDIF
+        \ELSE
+            \STATE $PC \leftarrow PC + 4$
+        \ENDIF
+    \ENDFOR
+\ENDLOOP
+\end{algorithmic}
+\hrule height 0.4pt
+\end{varwidth}
+}
+\end{document}
