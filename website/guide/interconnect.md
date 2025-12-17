@@ -34,6 +34,8 @@ Core 0 fills this batch until it encounters a control dependency (branch) or the
 
 Normal instructions are pipelined via batches. Control flow instructions (e.g., `BR.Z`) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate.
 
+![Sequence Diagram](/assets/figures/sequence.png)
+
 ### Handling Divergence
 
 When Core 0 decodes a `BR.Z P0` instruction:

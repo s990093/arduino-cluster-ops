@@ -2,6 +2,8 @@
 
 The system architecture defines a strict hierarchical topology, designed to physically emulate the CUDA execution model. Data flows from the high-level software abstraction on the host down to bit-level arithmetic operations in the distributed cores.
 
+![Detailed System Architecture](/assets/figures/sys_arch.png)
+
 ## Execution Model (SIMT)
 
 The core execution model follows a Single-Instruction Multiple-Thread (SIMT) paradigm, relying on a "Broadcast-and-Mask" mechanism.
