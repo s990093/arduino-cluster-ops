@@ -1,0 +1,80 @@
+\documentclass[tikz,border=5mm]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, shadows, shapes.multipart}
+
+\definecolor{purple}{RGB}{128,0,128}
+
+\begin{document}
+    \begin{tikzpicture}[
+        node distance=1.2cm,
+        box/.style={rectangle, draw=black, thick, rounded corners, align=center, font=\sffamily\small},
+        core_box/.style={rectangle, draw=black, line width=1pt, rounded corners, inner sep=10pt, align=center},
+        mem_box/.style={rectangle, draw=black, thick, fill=yellow!10, minimum width=3cm, minimum height=1cm, align=center},
+        queue_box/.style={rectangle, draw=purple, thick, dashed, fill=purple!5, minimum width=4cm, minimum height=0.8cm, align=center},
+        arrow/.style={->, >=stealth, thick}
+    ]
+
+    % --- Host Node ---
+    \node[box, fill=gray!20, minimum width=10cm] (host) {\textbf{HOST (Serial CLI)}\\Commands: \texttt{gpu\_reset}, \texttt{load\_imem}, \texttt{dma\_h2d}, \texttt{kernel\_launch}};
+
+    % --- Core 0 (Front-End) ---
+    \node[core_box, fill=blue!5, below=1.5cm of host, xshift=-4cm] (core0) {
+        \textbf{Core 0: Front-End (Warp Scheduler)} \\[0.2cm]
+        
+        \begin{tikzpicture}[node distance=0.8cm]
+            \node[box, fill=white] (cli) {[Serial Handler] $\to$ [CLI Parser]};
+            
+            \node[mem_box, below=0.5cm of cli] (imem) {
+                \textbf{Instruction Memory (IMEM)}\\
+                Size: 1024 Insts\\
+                \scriptsize \texttt{PC:0 MOV R1,5}
+            };
+            
+            \node[box, fill=white, below=0.5cm of imem] (fetch) {
+                \textbf{Fetch \& Decode Unit}\\
+                PC Control (BRA/BR.Z)\\
+                Decode Opcode/Operands
+            };
+            
+            \draw[arrow] (cli) -- (imem);
+            \draw[arrow] (imem) -- (fetch);
+        \end{tikzpicture}
+    };
+
+    % --- Core 1 (Back-End) ---
+    \node[core_box, fill=green!5, right=1.0cm of core0] (core1) {
+        \textbf{Core 1: Back-End (SIMD Engine)} \\[0.2cm]
+        
+        \begin{tikzpicture}[node distance=0.8cm]
+            \node[box, fill=white, minimum width=5cm] (simd) {
+                \textbf{8-Lane SIMD Execution Engine}\\
+                \scriptsize Lane 0 .. Lane 7 (R/F/P Registers)
+            };
+            
+            \node[mem_box, below=0.5cm of simd, fill=orange!10] (vram) {
+                \textbf{Shared Global Memory (VRAM)}\\
+                Size: 40KB - 1MB\\
+                Shared Address Space
+            };
+            
+            \node[box, fill=white, below=0.5cm of vram] (trace) {
+                \textbf{Execution Trace Logger}\\
+                Cycle-Accurate JSON Stream
+            };
+            
+            \draw[arrow] (simd) -- (vram);
+            \draw[arrow] (vram) -- (trace);
+        \end{tikzpicture}
+    };
+
+    % --- Interconnects ---
+    \draw[arrow, line width=1.5pt] (host) -- node[midway, fill=white] {UART (115200/Turbo)} (core0.north);
+    
+    % FreeRTOS Queue
+    \node[queue_box, below right=0.5cm and -1cm of core0.east] (queue) {\textbf{FreeRTOS Queue}\\(Instruction Batch)};
+    
+    \draw[arrow, thick, blue] (core0.east) |- (queue.west);
+    \draw[arrow, thick, blue] (queue.east) -| (core1.north);
+
+    \end{tikzpicture}
+\end{document}
