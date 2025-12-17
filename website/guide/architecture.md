@@ -57,7 +57,16 @@ To support multi-chip kernels (e.g., distributed matrix multiplication), a dedic
 
 The AMB82-Mini serves as the high-level scheduler, implementing an Asymmetric Multi-Processing (AMP) model to manage the flow of data from the host to the distributed compute nodes.
 
-> [!NOTE] > **Layer 1 AMP Architecture**: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.
+> [!NOTE] ### Layer 1 AMP Architecture
+> The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.
+
+![Layer 1 AMP Architecture](/assets/figures/layer1_amp.png)
+
+### Grid Dispatch Algorithm
+
+The following algorithm illustrates the Grid Dispatch and DMA Injection logic running on the AMB82-Mini:
+
+![Grid Dispatch Algorithm](/assets/figures/layer1_algo.png)
 
 ## Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor
 

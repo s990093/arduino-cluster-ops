@@ -1,0 +1,46 @@
+\documentclass[preview,border=12pt]{standalone}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{varwidth}
+
+\begin{document}
+\begin{varwidth}{15cm} % Set a reasonable width
+\textbf{Algorithm 1} Grid Dispatch \& DMA Injection (Running on AMB82-Mini)
+\vspace{2pt}
+\hrule height 0.8pt
+\vspace{2pt}
+\hrule height 0.4pt
+\begin{algorithmic}[1]
+\small
+\REQUIRE $K_{config}$: Kernel Configuration (Dimensions, Opcode)
+\REQUIRE $T_{global}$: Global Tensor Data (Weights/Inputs) stored in DDR
+\ENSURE $G_{bus}$: Global G-BUS Data Stream (To ESP32)
+
+\STATE \textbf{Initialize} $DMA_{eng}$ with burst size 512 Bytes
+\STATE \textbf{Divide} $T_{global}$ into memory tiles $\{t_0, t_1, \dots, t_n\}$ fit for L2 SRAM
+
+\FORALL{tile $t_i$ in $T_{global}$}
+    \STATE \COMMENT{Step 1: Send Metadata Sideband}
+    \STATE \textbf{Push} $\text{Meta}(t_i)$ to Metadata Buffer (Shape, Precision)
+    \STATE $\text{SetSignal}(\text{MD\_Valid}, \text{High})$
+
+    \STATE \COMMENT{Step 2: Trigger Hardware Engine}
+    \WHILE{$\text{Signal}(\text{G\_BUSY}) == \text{High}$}
+        \STATE \textbf{Wait} \COMMENT{Flow control: Block until ESP32 Buffer is Free}
+    \ENDWHILE
+
+    \STATE \COMMENT{Step 3: Zero-Copy Transfer}
+    \STATE $DMA_{src} \leftarrow \text{Address}(t_i)$
+    \STATE $DMA_{dst} \leftarrow \text{G\_BUS\_PORT}$
+    \STATE $\text{DMA\_Start}()$ \COMMENT{Drives 8080 Bus}
+
+    \STATE \textbf{Wait} for $DMA_{IRQ}$ (Transfer Complete)
+\ENDFOR
+
+\STATE \COMMENT{Step 4: Kernel Launch}
+\STATE $\text{SendPacket}(\text{CMD\_LAUNCH})$
+\end{algorithmic}
+\hrule height 0.4pt
+\end{varwidth}
+\end{document}
