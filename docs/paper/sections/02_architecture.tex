@@ -196,9 +196,67 @@ The system architecture defines a strict hierarchical topology, designed to phys
 
     \end{tikzpicture}
     % --- 結束 TikZ 程式碼 ---
-SP32-S3 as Streamin    } % 結束 resizebox
+    } % End resizebox
     \caption{Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads).}
     \label{fig:full_architecture}
+\end{figure*}
+
+
+\subsection{Execution Model (SIMT)}
+The core execution model follows a Single-Instruction Multiple-Thread (SIMT) paradigm, relying on a "Broadcast-and-Mask" mechanism.
+
+\begin{figure*}[htbp]
+\centering
+\begin{tikzpicture}[node distance=1.5cm, auto,
+    timeline/.style={->, thick, gray},
+    msg/.style={->, thick, blue, dashed},
+    box/.style={rectangle, draw, fill=white, rounded corners, font=\scriptsize, align=center, minimum width=2.5cm}]
+
+    % Timelines
+    \node[align=center, font=\bfseries] (esp) at (0,0) {ESP32\\(Scheduler)};
+    \node[align=center, font=\bfseries] (rp0) at (5,0) {RP2040 \#0\\(Lane 0)};
+    \node[align=center, font=\bfseries] (rp1) at (9,0) {RP2040 \#1\\(Lane 1)};
+    
+    \node (esp_bot) at (0,-8) {};
+    \node (rp0_bot) at (5,-8) {};
+    \node (rp1_bot) at (9,-8) {};
+
+    \draw[timeline] (esp) -- (esp_bot);
+    \draw[timeline] (rp0) -- (rp0_bot);
+    \draw[timeline] (rp1) -- (rp1_bot);
+
+    % Events
+    \node[box, fill=blue!10] (fetch) at (0, -1) {Fetch Instr:\\\texttt{LDL R1, [R0]}};
+    \node[box, fill=green!10] (broadcast) at (0, -2.5) {Broadcast:\\\texttt{Op:0x64, Ops:...}};
+
+    \draw[msg] (broadcast) -- node[above, font=\tiny] {Local G-BUS} (5, -3);
+    \draw[msg] (broadcast) -- (9, -3);
+
+    % RP2040 Processing
+    \node[box, fill=yellow!10] (rx0) at (5, -3.5) {Receive Packet};
+    \node[box, fill=yellow!10] (rx1) at (9, -3.5) {Receive Packet};
+
+    \node[box, fill=red!10] (lane0) at (5, -4.8) {Read SR\_LANEID\\(ID = 0)};
+    \node[box, fill=red!10] (lane1) at (9, -4.8) {Read SR\_LANEID\\(ID = 1)};
+
+    \draw[->] (rx0) -- (lane0);
+    \draw[->] (rx1) -- (lane1);
+    
+    \node[box, fill=orange!10] (addr0) at (5, -6.0) {Calc Addr:\\\texttt{R0 + 0*4 = 0x1000}};
+    \node[box, fill=orange!10] (addr1) at (9, -6.0) {Calc Addr:\\\texttt{R0 + 1*4 = 0x1004}};
+
+    \draw[->] (lane0) -- (addr0);
+    \draw[->] (lane1) -- (addr1);
+
+    \node[box, fill=gray!20] (load0) at (5, -7.2) {Execute Load:\\\texttt{R1 = Mem[0x1000]}};
+    \node[box, fill=gray!20] (load1) at (9, -7.2) {Execute Load:\\\texttt{R1 = Mem[0x1004]}};
+
+    \draw[->] (addr0) -- (load0);
+    \draw[->] (addr1) -- (load1);
+
+\end{tikzpicture}
+\caption{SIMT Execution Swimlane. This diagram illustrates the "Thread Allocation" mechanism. The ESP32 scheduler broadcasts a single \texttt{LDL} instruction. Each RP2040 worker (Lane) simultaneously receives the opcode but accesses disjoint memory addresses (Base + LaneID $\times$ 4) derived from its local \texttt{SR\_LANEID} register.}
+\label{fig:simt_swimlane}
 \end{figure*}
 
 \subsection{Cluster Hierarchy}
@@ -505,9 +563,9 @@ The ESP32-S3 functions as the critical Layer 2 \textit{Streaming Multiprocessor 
     \node (bus_label) at (0, 0) [above, font=\bfseries] {GLOBAL G-BUS (8-bit Parallel)};
     \draw[bus] (-5, 0) -- (6, 0);
     
-    % Sideband visually separated
-    \draw[bus, color=orange!70!black, line width=2pt] (-5, 0.2) -- (6, 0.2);
-    \node at (4.5, 0.4) [font=\tiny\bfseries, text=orange!70!black] {Metadata Sideband (MD0-MD3)};
+    % Sideband visually separated - Moved upwards to avoid crossing
+    \draw[bus, color=orange!70!black, line width=2pt] (-5, 0.5) -- (6, 0.5);
+    \node at (4.5, 0.7) [font=\tiny\bfseries, text=orange!70!black] {Metadata Sideband (MD0-MD3)};
 
     % --- 2. ESP32-S3 SM 0 CONTAINER ---
     
@@ -525,8 +583,8 @@ The ESP32-S3 functions as the critical Layer 2 \textit{Streaming Multiprocessor 
         \textit{(Pre-Schedule)}
     };
 
-    % Connections from Bus
-    \draw[bus_arrow, orange!70!black] (-2.5, 0.2) -- node[left, font=\tiny] {MD0-MD3} (meta_cache.north);
+    % Connections from Bus - Adjusted path
+    \draw[bus_arrow, orange!70!black] (-2.5, 0.5) -- node[left, font=\tiny] {MD0-MD3} (meta_cache.north);
     \draw[bus_arrow] (0, 0) -- node[right, font=\tiny] {Data Stream} (rx_unit.north);
     \draw[control_flow] (meta_cache) -- (rx_unit);
 
@@ -568,10 +626,10 @@ The ESP32-S3 functions as the critical Layer 2 \textit{Streaming Multiprocessor 
         Warp Logic Processing
     };
 
-    % Dispatch Window
+    % Dispatch Window - Moved text inside to avoid overlap
     \node[component, below=0.8cm of reorder_q, text width=3.5cm, fill=yellow!10] (dispatch) {
         \textbf{Dispatch Window}\\
-        8--16 Entries\\
+        \scriptsize 8--16 Entries\\
         (Ready for TX)
     };
 
@@ -601,19 +659,22 @@ The ESP32-S3 functions as the critical Layer 2 \textit{Streaming Multiprocessor 
         (Collapsed)
     };
     
-    % Bus connections for neighbors
+    % Bus connections for neighbors - Aligned vertically
     \draw[bus_arrow] (sm1.north |- 0,0) -- (sm1.north);
     \draw[bus_arrow] (smn.north |- 0,0) -- (smn.north);
 
     % --- 3. LOCAL BUS (Bottom) ---
-    \coordinate (local_bus_y) at ($(burst_unit.south) + (0,-0.8)$);
-    \draw[bus] (-5, -9.8) -- (6, -9.8);
-    \node at (0, -10.1) [font=\bfseries] {LOCAL G-BUS (Instruction Broadcast)};
+    % Increased spacing to avoid overlap
+    \coordinate (local_bus_y) at ($(burst_unit.south) + (0,-1.2)$);
+    \draw[bus] (-5, -10.2) -- (6, -10.2);
+    
+    % Moved label to avoid overlapping with line
+    \node at (0, -10.5) [font=\bfseries] {LOCAL G-BUS (Instruction Broadcast)};
 
-    % Output connection
-    \draw[bus_arrow] (burst_unit.south) -- (0, -9.8);
-    \draw[bus_arrow] (sm1.south) -- (sm1.south |- 0, -9.8);
-    \draw[bus_arrow] (smn.south) -- (smn.south |- 0, -9.8);
+    % Output connection - Extended length
+    \draw[bus_arrow] (burst_unit.south) -- (0, -10.2);
+    \draw[bus_arrow] (sm1.south) -- (sm1.south |- 0, -10.2);
+    \draw[bus_arrow] (smn.south) -- (smn.south |- 0, -10.2);
 
 \end{tikzpicture}
 }

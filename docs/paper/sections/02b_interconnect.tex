@@ -28,6 +28,10 @@ struct InstrBatch {
 
 Core 0 fills this batch until it encounters a control dependency (branch) or the batch is full. It then pushes the entire batch to the queue in a single operation.
 
+Core 0 fills this batch until it encounters a control dependency (branch) or the batch is full. It then pushes the entire batch to the queue in a single operation.
+
+
+
 \subsection{Synchronization Sequence}
 
 Fig. \ref{fig:seq} illustrates the timing interaction during a typical execution flow involving a conditional branch.

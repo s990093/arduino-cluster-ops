@@ -2,6 +2,7 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
+\usepackage{algorithm}
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
@@ -72,19 +73,31 @@ agent@deepmind.com}
 \input{sections/00_abstract}
 \input{sections/00b_revision_history}
 \input{sections/01_introduction}
+
+% II. System Architecture
 \input{sections/02_architecture}
+
+% III. Hardware Implementation
+\input{sections/02d_hardware_topology}
+\input{sections/04_implementation} % Moving logical firmware parts here
+
+% IV. Interconnect & Synchronization
 \input{sections/02b_interconnect}
 \input{sections/02c_bus_protocol}
-\input{sections/02d_hardware_topology}
-\input{sections/02e_electrical_specs}
+
+% V. ISA
 \input{sections/03_isa}
 \input{sections/03b_abi}
-\input{sections/04_implementation}
-\input{sections/04b_host_interface}
+
+% VI. Software
 \input{sections/04d_compiler}
+\input{sections/04b_host_interface}
 \input{sections/04c_profiling}
-\input{sections/05_case_study}
+
+% VII. Evaluation
 \input{sections/05b_benchmarks}
+\input{sections/05_case_study}
+\input{sections/02e_electrical_specs}
 \input{sections/06_conclusion}
 
 \begin{thebibliography}{00}

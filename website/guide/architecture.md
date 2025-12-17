@@ -24,6 +24,28 @@ The ESP32-S3 mimics a discrete GPU Streaming Multiprocessor (SM) using its dual-
 
 ![ESP32 Internal Arch](/images/micro_arch_diag.png)
 
+```mermaid
+graph TD
+    User[Host PC / Python] -->|UART Command| Core0
+
+    subgraph ESP32 [Mini-SM]
+        subgraph FrontEnd ["Core 0: Front-End (Warp Scheduler)"]
+            Fetch[Instruction Fetch]
+            Decode[Decode & Issue]
+            PC[PC Control]
+            Trace[Trace Unit]
+        end
+
+        subgraph BackEnd ["Core 1: Back-End (SIMD Engine)"]
+            SIMD["8-Lane SIMD Execution Unit"]
+            RegFile["Register File (8x R[32])"]
+        end
+
+        FrontEnd -->|Instructions (Queue)| BackEnd
+        BackEnd -->|Completion (Queue)| FrontEnd
+    end
+```
+
 ### Core 0 (Receiver / Front-End)
 
 Dedicated to high-throughput I/O.
@@ -55,3 +77,70 @@ The RP2040 represents the "CUDA Cores".
 4.  **Execute**: When all nodes release the barrier, execution starts simultaneously (<1µs jitter).
 
 ![Execution Mapping](/images/execution_mapping_placeholder.png)
+
+## Hardware Interface
+
+The system utilizes a **Dual-Port Split-Bus** design to enable a true pipeline, avoiding a shared bus bottleneck.
+
+### Physical Bus Protocol
+
+We use a custom **8-bit Parallel Low-Latency Bus** (Intel 8080-style).
+
+- **Bandwidth**: ~50 MB/s (20ns cycle time)
+- **Voltage**: 3.3V CMOS
+- **Transmission**: Big-Endian, Burst Mode
+
+| Signal   | Type    | Description                                 |
+| :------- | :------ | :------------------------------------------ |
+| `D[0:7]` | Data    | 8-bit bidirectional data bus                |
+| `CS#`    | Control | Chip Select (Active Low)                    |
+| `DC`     | Control | **Low**: Command / **High**: Data           |
+| `WR#`    | Clock   | Write Strobe (Slave latches on Rising Edge) |
+| `SYNC`   | Global  | **Warp Trigger** (Global Barrier Release)   |
+
+### Pin Mapping (ESP32-S3)
+
+The ESP32-S3 acts as a router/scheduler, managing simultaneous RX (from Host) and TX (to SMSP Cores).
+
+#### Input Interface (Slave)
+
+| Signal          | Pin      | Function                     |
+| :-------------- | :------- | :--------------------------- |
+| `G_DATA_[0..7]` | GPIO 1-9 | Data Input (Skipping GPIO 3) |
+| `G_WR`          | GPIO 10  | Write Strobe                 |
+| `G_DC`          | GPIO 11  | Data/Command                 |
+
+#### Output Interface (Master)
+
+| Signal          | Pin        | Function           |
+| :-------------- | :--------- | :----------------- |
+| `L_DATA_[0..3]` | GPIO 15-18 | Low Nibble         |
+| `L_DATA_[4..7]` | GPIO 39-42 | High Nibble        |
+| `L_WR`          | GPIO 48    | Write Strobe       |
+| `SYNC_TRIG`     | GPIO 46    | **Global Barrier** |
+
+### Timing & Integrity
+
+- **Cycle Time**: 20 ns (50 MHz)
+- **Setup Time**: Data must be stable 5ns before `WR#` rising edge.
+- **Hold Time**: Data must be held 3ns after `WR#` rising edge.
+- **Requirements**: Matching trace lengths (±1mm) and a solid common ground plane.
+
+## Firmware Internals
+
+### Core Responsibilities
+
+- **Core 0 (Front-End)**: Handles Instruction Fetch, Decode, PC Control, and UART I/O.
+- **Core 1 (Back-End)**: Dedicated to the 8-Lane SIMD Execution Loop.
+- **Synchronization**: Uses FreeRTOS Queues for cycle-accurate lockstep execution (Issue -> Execute).
+
+### LZ4 Decompression Integration
+
+To accelerate kernel loading, the firmware integrates a lightweight LZ4 decompressor.
+
+1.  **Library**: Ported `lz4.c` / `lz4.h` (std C).
+2.  **Flow**:
+    - Host sends `load_imem_lz4 <size>`.
+    - Firmware allocates specialized buffer.
+    - Chunks are received and decompressed in-place into I-RAM.
+3.  **Performance**: Reduces kernel upload time by ~3-4x compared to raw binary transfer.

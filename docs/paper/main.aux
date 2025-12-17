@@ -2,74 +2,288 @@
 \providecommand\hyper@newdestlabel[2]{}
 \providecommand\HyField@AuxAddToFields[1]{}
 \providecommand\HyField@AuxAddToCoFields[2]{}
-\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {II}System Architecture}{1}{section.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Cluster Hierarchy}{1}{subsection.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}1}Layer 0: Host System (Grid)}{1}{subsubsection.2.1.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}2}Layer 1: GPU Master (AMB82-Mini)}{1}{subsubsection.2.1.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads).}}{2}{figure.1}\protected@file@percent }
-\newlabel{fig:full_architecture}{{1}{2}{Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads)}{figure.1}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}3}Layer 2: Streaming Multiprocessors (ESP32-S3)}{2}{subsubsection.2.1.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-A}4}Layer 3: SMSP / Threads (RP2040)}{2}{subsubsection.2.1.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}ESP32-S3 Micro-Architecture (Node Detail)}{2}{subsection.2.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM.}}{3}{figure.2}\protected@file@percent }
-\newlabel{fig:vm_arch}{{2}{3}{ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM}{figure.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Scalability and Multi-Chip Integration}{3}{subsection.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}1}Inter-Node Communication}{3}{subsubsection.2.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}2}Global Synchronization}{3}{subsubsection.2.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Layer 1 Detail: AMB82-Mini (Master Controller)}{3}{subsection.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor}{3}{subsection.2.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-F}}Hardware Specifications}{3}{subsection.2.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-F}1}AMB82-Mini (GPU Grid Master)}{3}{subsubsection.2.6.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.}}{4}{figure.3}\protected@file@percent }
-\newlabel{fig:layer1_arch}{{3}{4}{Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory}{figure.3}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-F}2}Comparison: RP2040 vs. ESP32}{4}{subsubsection.2.6.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Hardware Feature Comparison: RP2040 vs. ESP32}}{4}{table.1}\protected@file@percent }
-\newlabel{tab:chip_comparison}{{I}{4}{Hardware Feature Comparison: RP2040 vs. ESP32}{table.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {III}Inter-Core Communication Protocol}{4}{section.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Communication Mechanism}{4}{subsection.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Instruction Batching}{4}{subsection.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Synchronization Sequence}{4}{subsection.3.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.}}{5}{figure.4}\protected@file@percent }
-\newlabel{fig:layer2_arch}{{4}{5}{Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM}{figure.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Synchronization Sequence Diagram. Normal instructions are pipelined via batches. Control flow instructions (e.g., BR.Z) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate.}}{5}{figure.5}\protected@file@percent }
-\newlabel{fig:seq}{{5}{5}{Synchronization Sequence Diagram. Normal instructions are pipelined via batches. Control flow instructions (e.g., BR.Z) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate}{figure.5}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}1}Handling Divergence}{5}{subsubsection.3.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {IV}Physical Bus Interface Specification}{5}{section.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Interface Overview}{5}{subsection.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Physical Layer Pinout}{6}{subsection.4.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces 8-bit Parallel Bus Pinout Definition}}{6}{table.2}\protected@file@percent }
-\newlabel{tab:bus_pinout}{{II}{6}{8-bit Parallel Bus Pinout Definition}{table.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Word Transmission Protocol}{6}{subsection.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}1}Byte Ordering (Endianness)}{6}{subsubsection.4.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-C}2}Burst Transmission Mode}{6}{subsubsection.4.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Timing Characteristics}{6}{subsection.4.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Bus Timing Diagram. Data is stable during the low phase of \texttt  {WR\#}, and the Slave latches data on the rising edge. A 20ns cycle period yields 50 MB/s throughput.}}{6}{figure.6}\protected@file@percent }
-\newlabel{fig:bus_timing}{{6}{6}{Bus Timing Diagram. Data is stable during the low phase of \texttt {WR\#}, and the Slave latches data on the rising edge. A 20ns cycle period yields 50 MB/s throughput}{figure.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Instruction Dispatch Sequence}{6}{subsection.4.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Hardware Implementation Notes}{6}{subsection.4.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}1}RP2040 Reception (PIO State Machine)}{6}{subsubsection.4.6.1}\protected@file@percent }
-\newlabel{lst:pio_rx}{{1}{6}{RP2040 PIO Program for 8080 Bus Reception}{lstlisting.1}{}}
-\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}RP2040 PIO Program for 8080 Bus Reception}{6}{lstlisting.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}2}Signal Integrity Considerations}{6}{subsubsection.4.6.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Instruction Dispatch Sequence. The Master (ESP32) transmits a 32-bit HMMA instruction as four sequential bytes over the 8-bit bus. The Slave (RP2040) uses PIO to reassemble the instruction and execute upon SYNC trigger.}}{7}{figure.7}\protected@file@percent }
-\newlabel{fig:bus_sequence}{{7}{7}{Instruction Dispatch Sequence. The Master (ESP32) transmits a 32-bit HMMA instruction as four sequential bytes over the 8-bit bus. The Slave (RP2040) uses PIO to reassemble the instruction and execute upon SYNC trigger}{figure.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-G}}Performance Analysis}{7}{subsection.4.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {V}Hardware Pipeline and Topology}{7}{section.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Split-Bus Architecture}{8}{subsection.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Pin Mapping Strategy}{8}{subsection.5.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}1}Layer 1: AMB82-Mini (GPU Master)}{8}{subsubsection.5.2.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Global G-BUS Pinout (AMB82-Mini)}}{8}{table.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}2}Layer 2: ESP32-S3 (Streaming Multiprocessor)}{8}{subsubsection.5.2.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces ESP32-S3 Interface Mapping}}{8}{table.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}3}Layer 3: RP2040 (SMSP Cores)}{8}{subsubsection.5.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}System Corner Diagram}{8}{subsection.5.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores.}}{8}{figure.8}\protected@file@percent }
-\newlabel{fig:high_level_pipeline}{{8}{8}{High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores}{figure.8}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}1}High-Level Data Flow}{8}{figure.8}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}2}SMSP Fan-out View}{8}{subsubsection.5.3.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus.}}{8}{figure.9}\protected@file@percent }
-\newlabel{fig:smsp_fanout}{{9}{8}{SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus}{figure.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Physical Implementation Notes}{9}{subsection.5.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Pipeline Timing Analysis}{9}{subsection.5.5}\protected@file@percent }
-\@writefile{toc}{\contentslin
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{3}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}System Architecture}{3}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Execution Model (SIMT)}{3}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Cluster Hierarchy}{3}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-B}1}Layer 0: Host System (Grid)}{3}{subsubsection.2.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads).}}{4}{figure.1}\protected@file@percent }
+\newlabel{fig:full_architecture}{{1}{4}{Detailed System Architecture. The hierarchy moves from the Host (Grid) to the AMB82-Mini (Controller), then to ESP32-S3s (Streaming Multiprocessors), and finally to RP2040s (Threads)}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces SIMT Execution Swimlane. This diagram illustrates the "Thread Allocation" mechanism. The ESP32 scheduler broadcasts a single \texttt  {LDL} instruction. Each RP2040 worker (Lane) simultaneously receives the opcode but accesses disjoint memory addresses (Base + LaneID $\times $ 4) derived from its local \texttt  {SR\_LANEID} register.}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:simt_swimlane}{{2}{5}{SIMT Execution Swimlane. This diagram illustrates the "Thread Allocation" mechanism. The ESP32 scheduler broadcasts a single \texttt {LDL} instruction. Each RP2040 worker (Lane) simultaneously receives the opcode but accesses disjoint memory addresses (Base + LaneID $\times $ 4) derived from its local \texttt {SR\_LANEID} register}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-B}2}Layer 1: GPU Master (AMB82-Mini)}{5}{subsubsection.2.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-B}3}Layer 2: Streaming Multiprocessors (ESP32-S3)}{5}{subsubsection.2.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-B}4}Layer 3: SMSP / Threads (RP2040)}{5}{subsubsection.2.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}ESP32-S3 Micro-Architecture (Node Detail)}{5}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Scalability and Multi-Chip Integration}{5}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-D}1}Inter-Node Communication}{5}{subsubsection.2.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-D}2}Global Synchronization}{5}{subsubsection.2.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Layer 1 Detail: AMB82-Mini (Master Controller)}{5}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-F}}Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor}{5}{subsection.2.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM.}}{6}{figure.3}\protected@file@percent }
+\newlabel{fig:vm_arch}{{3}{6}{ESP32-S3 Internal Micro-Architecture. Host commands drive Core 0, which fetches instructions and dispatches them via a queue to the Core 1 SIMD engine for parallel execution over shared VRAM}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory.}}{6}{figure.4}\protected@file@percent }
+\newlabel{fig:layer1_arch}{{4}{6}{Layer 1 AMP Architecture: The AMB82-Mini effectively utilizes its DMA engine as a secondary processor, managed by an AMP-like scheduler that orchestrates context switching and priorities in external DDR memory}{figure.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-G}}Hardware Specifications}{7}{subsection.2.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-G}1}AMB82-Mini (GPU Grid Master)}{7}{subsubsection.2.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-G}2}Comparison: RP2040 vs. ESP32}{7}{subsubsection.2.7.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Hardware Feature Comparison: RP2040 vs. ESP32}}{7}{table.1}\protected@file@percent }
+\newlabel{tab:chip_comparison}{{I}{7}{Hardware Feature Comparison: RP2040 vs. ESP32}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Hardware Pipeline and Topology}{7}{section.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Summary of Hardware Control Algorithms}}{7}{table.2}\protected@file@percent }
+\newlabel{tab:algo_summary}{{II}{7}{Summary of Hardware Control Algorithms}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Split-Bus Architecture}{7}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Pin Mapping Strategy}{7}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}1}Layer 1: AMB82-Mini (GPU Master)}{7}{subsubsection.3.2.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Global G-BUS Pinout (AMB82-Mini)}}{7}{table.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}2}Layer 2: ESP32-S3 (Streaming Multiprocessor)}{7}{subsubsection.3.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {III-B}2a}Warp Scheduler Implementation}{7}{paragraph.3.2.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-B}3}Layer 3: RP2040 (SMSP Cores)}{7}{subsubsection.3.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM.}}{8}{figure.5}\protected@file@percent }
+\newlabel{fig:layer2_arch}{{5}{8}{Layer 2 Internal Architecture: The ESP32-S3 SM Architecture showing the split between Core 0 (Receiver) and Core 1 (Scheduler), connected by ring buffers and shared L1 PSRAM}{figure.5}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Grid Dispatch \& DMA Injection (Running on AMB82-Mini)}}{8}{algorithm.1}\protected@file@percent }
+\newlabel{alg:grid_dispatch}{{1}{8}{Layer 1: AMB82-Mini (GPU Master)}{algorithm.1}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Micro-CUDA Warp Scheduler (Running on ESP32 Core 1)}}{9}{algorithm.2}\protected@file@percent }
+\newlabel{alg:warp_sched}{{2}{9}{Warp Scheduler Implementation}{algorithm.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces ESP32-S3 Interface Mapping}}{9}{table.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}System Corner Diagram}{9}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}1}High-Level Data Flow}{9}{figure.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-C}2}SMSP Fan-out View}{9}{subsubsection.3.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Physical Implementation Notes}{9}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-E}}Pipeline Timing Analysis}{9}{subsection.3.5}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {3}{\ignorespaces SIMT Execution \& Lane Addressing (Running on RP2040)}}{10}{algorithm.3}\protected@file@percent }
+\newlabel{alg:simt_exec}{{3}{10}{Layer 3: RP2040 (SMSP Cores)}{algorithm.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores.}}{10}{figure.6}\protected@file@percent }
+\newlabel{fig:high_level_pipeline}{{6}{10}{High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores}{figure.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus.}}{11}{figure.7}\protected@file@percent }
+\newlabel{fig:smsp_fanout}{{7}{11}{SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus}{figure.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-F}}Execution Model Mapping}{11}{subsection.3.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {III-F}1}Hardware Component Mapping}{11}{subsubsection.3.6.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Hardware Mapping: CUDA vs. $\mu $GPU Cluster}}{11}{table.5}\protected@file@percent }
+\newlabel{tab:hw_mapping}{{V}{11}{Hardware Mapping: CUDA vs. $\mu $GPU Cluster}{table.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-G}}Kernel Launch Flow}{11}{subsection.3.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Implementation Details}{11}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}VRAM Organization}{11}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Firmware Implementation}{11}{subsection.4.2}\protected@file@percent }
+\newlabel{lst:loop}{{1}{11}{SIMD Execution Loop Snippet}{lstlisting.1}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}SIMD Execution Loop Snippet}{11}{lstlisting.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Cycle-Level Pipeline Timing. During cycles C3--C5, the system effectively overlaps High-Level Data Injection (AMB82), Mid-Level Broadcasting (ESP32), and Low-Level Computation (RP2040).}}{12}{figure.8}\protected@file@percent }
+\newlabel{fig:pipeline_timing}{{8}{12}{Cycle-Level Pipeline Timing. During cycles C3--C5, the system effectively overlaps High-Level Data Injection (AMB82), Mid-Level Broadcasting (ESP32), and Low-Level Computation (RP2040)}{figure.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Conceptual Execution Model Mapping. The physical hardware layers directly correspond to the logical hierarchy of the CUDA execution model.}}{12}{figure.9}\protected@file@percent }
+\newlabel{fig:execution_mapping}{{9}{12}{Conceptual Execution Model Mapping. The physical hardware layers directly correspond to the logical hierarchy of the CUDA execution model}{figure.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Kernel Launch Synchronization. Parameters are broadcast first, followed by a hardware-wired AND/OR barrier release for microsecond-level synchronization.}}{12}{figure.10}\protected@file@percent }
+\newlabel{fig:kernel_launch}{{10}{12}{Kernel Launch Synchronization. Parameters are broadcast first, followed by a hardware-wired AND/OR barrier release for microsecond-level synchronization}{figure.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}System Configuration}{12}{subsection.4.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces ESP32 System Configuration}}{12}{table.6}\protected@file@percent }
+\newlabel{tab:config}{{VI}{12}{ESP32 System Configuration}{table.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}SIMD Engine Implementation (\texttt  {vm\_simd\_v15.cpp})}{12}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}1}Architecture: Structure-of-Arrays (SoA) Layout}{12}{figure.11}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces SoA Register Layout: R[reg][lane] for optimal cache efficiency}}{13}{figure.11}\protected@file@percent }
+\newlabel{fig:soa_layout}{{11}{13}{SoA Register Layout: R[reg][lane] for optimal cache efficiency}{figure.11}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}2}Computed Goto Dispatch}{13}{subsubsection.4.4.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2}Computed Goto Implementation}{13}{lstlisting.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Switch vs. Computed Goto: Xtensa Assembly}}{13}{table.7}\protected@file@percent }
+\newlabel{tab:switch_asm}{{VII}{13}{Switch vs. Computed Goto: Xtensa Assembly}{table.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Computed Goto delivers 6× dispatch speedup by eliminating branch prediction penalties}}{13}{figure.12}\protected@file@percent }
+\newlabel{fig:goto_speedup}{{12}{13}{Computed Goto delivers 6× dispatch speedup by eliminating branch prediction penalties}{figure.12}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}3}ASM-Optimized Warp Operations}{13}{subsubsection.4.4.3}\protected@file@percent }
+\newlabel{lst:asm_add}{{3}{13}{Optimized Xtensa Assembly for Warp Add}{lstlisting.3}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {3}Optimized Xtensa Assembly for Warp Add}{13}{lstlisting.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Predicate-aware warp operations with full unrolling}}{14}{figure.13}\protected@file@percent }
+\newlabel{fig:warp_unroll}{{13}{14}{Predicate-aware warp operations with full unrolling}{figure.13}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Memory Operation Modes}}{14}{table.8}\protected@file@percent }
+\newlabel{tab:mem_modes}{{VIII}{14}{Memory Operation Modes}{table.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Memory access patterns: Strided (LDL) vs. Gather (LDX)}}{14}{figure.14}\protected@file@percent }
+\newlabel{fig:mem_patterns}{{14}{14}{Memory access patterns: Strided (LDL) vs. Gather (LDX)}{figure.14}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}4}Memory Access Patterns}{14}{figure.14}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Fast math approximations: 5.3× speedup with controlled error}}{14}{figure.15}\protected@file@percent }
+\newlabel{fig:fast_math}{{15}{14}{Fast math approximations: 5.3× speedup with controlled error}{figure.15}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}5}Fast Math Approximations}{14}{figure.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}6}Performance Characteristics}{14}{figure.16}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Measured cycle counts on ESP32-S3 @ 240 MHz}}{14}{figure.16}\protected@file@percent }
+\newlabel{fig:perf_metrics}{{16}{14}{Measured cycle counts on ESP32-S3 @ 240 MHz}{figure.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}System Reliability and Fault Tolerance}{14}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}1}Failure Recovery}{14}{subsubsection.4.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}2}DMA Integrity}{14}{subsubsection.4.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Power and Thermal Considerations}{14}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}1}Power Distribution}{14}{subsubsection.4.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-F}2}Thermal Management}{14}{subsubsection.4.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-G}}Memory Safety and Sandbox}{14}{subsection.4.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Inter-Core Communication Protocol}{14}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Communication Mechanism}{14}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Instruction Batching}{15}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Synchronization Sequence}{15}{subsection.5.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Synchronization Sequence Diagram. Normal instructions are pipelined via batches. Control flow instructions (e.g., BR.Z) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate.}}{15}{figure.17}\protected@file@percent }
+\newlabel{fig:seq}{{17}{15}{Synchronization Sequence Diagram. Normal instructions are pipelined via batches. Control flow instructions (e.g., BR.Z) trigger a feedback loop, stalling Core 0 until Core 1 processes the predicate}{figure.17}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}1}Handling Divergence}{15}{subsubsection.5.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Physical Bus Interface Specification}{15}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Interface Overview}{15}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Physical Layer Pinout}{15}{subsection.6.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces 8-bit Parallel Bus Pinout Definition}}{15}{table.9}\protected@file@percent }
+\newlabel{tab:bus_pinout}{{IX}{15}{8-bit Parallel Bus Pinout Definition}{table.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Word Transmission Protocol}{15}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-C}1}Byte Ordering (Endianness)}{15}{subsubsection.6.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-C}2}Burst Transmission Mode}{16}{subsubsection.6.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Timing Characteristics}{16}{subsection.6.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Bus Timing Diagram. Data is stable during the low phase of \texttt  {WR\#}, and the Slave latches data on the rising edge. A 20ns cycle period yields 50 MB/s throughput.}}{16}{figure.18}\protected@file@percent }
+\newlabel{fig:bus_timing}{{18}{16}{Bus Timing Diagram. Data is stable during the low phase of \texttt {WR\#}, and the Slave latches data on the rising edge. A 20ns cycle period yields 50 MB/s throughput}{figure.18}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-E}}Instruction Dispatch Sequence}{16}{subsection.6.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-F}}Hardware Implementation Notes}{16}{subsection.6.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-F}1}RP2040 Reception (PIO State Machine)}{16}{subsubsection.6.6.1}\protected@file@percent }
+\newlabel{lst:pio_rx}{{4}{16}{RP2040 PIO Program for 8080 Bus Reception}{lstlisting.4}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4}RP2040 PIO Program for 8080 Bus Reception}{16}{lstlisting.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-F}2}Signal Integrity Considerations}{16}{subsubsection.6.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-G}}Performance Analysis}{16}{subsection.6.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Micro-CUDA ISA Specification}{16}{section.7}\protected@file@percent }
+\newlabel{sec:isa}{{VII}{16}{Micro-CUDA ISA Specification}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Execution Model \& Architecture Definition}{16}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-A}1}Hardware Layer Mapping (Physical Mapping)}{16}{subsubsection.7.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-A}2}Data Types}{16}{subsubsection.7.1.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {19}{\ignorespaces Instruction Dispatch Sequence. The Master (ESP32) transmits a 32-bit HMMA instruction as four sequential bytes over the 8-bit bus. The Slave (RP2040) uses PIO to reassemble the instruction and execute upon SYNC trigger.}}{17}{figure.19}\protected@file@percent }
+\newlabel{fig:bus_sequence}{{19}{17}{Instruction Dispatch Sequence. The Master (ESP32) transmits a 32-bit HMMA instruction as four sequential bytes over the 8-bit bus. The Slave (RP2040) uses PIO to reassemble the instruction and execute upon SYNC trigger}{figure.19}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-A}3}Register File}{17}{subsubsection.7.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-A}4}Single-Lane Architecture Overview}{17}{subsubsection.7.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Instruction Encoding Format}{17}{subsection.7.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {20}{\ignorespaces RP2040 Single-Lane SIMT Microarchitecture. The frontend fetches instructions via PIO, dispatches to execution units (Integer ALU, BF16 Tensor Core, SFU), and accesses memory through the LSU with lane-aware addressing.}}{18}{figure.20}\protected@file@percent }
+\newlabel{fig:rp2040_simt_arch}{{20}{18}{RP2040 Single-Lane SIMT Microarchitecture. The frontend fetches instructions via PIO, dispatches to execution units (Integer ALU, BF16 Tensor Core, SFU), and accesses memory through the LSU with lane-aware addressing}{figure.20}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {X}{\ignorespaces Supported Data Types}}{19}{table.10}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {21}{\ignorespaces 32-bit Instruction Encoding Format. All fields are byte-aligned for efficient parsing.}}{19}{figure.21}\protected@file@percent }
+\newlabel{fig:instr_encoding}{{21}{19}{32-bit Instruction Encoding Format. All fields are byte-aligned for efficient parsing}{figure.21}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Complete Instruction Set}{19}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-C}1}Group 1: System Control (Control \& Flow) [Opcode: 0x00 - 0x0F]}{19}{subsubsection.7.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-C}2}Group 2: Integer Arithmetic (Integer ALU) [Opcode: 0x10 - 0x1F]}{19}{subsubsection.7.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-C}3}Group 3: Deep Learning \& Data Conversion (AI \& Conversion) [Opcode: 0x20 - 0x2F]}{19}{subsubsection.7.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-C}4}Group 4: Floating Point \& Transcendental Functions (FP32 \& SFU) [Opcode: 0x30 - 0x5F]}{19}{subsubsection.7.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-C}5}Group 5: Memory Operations [Opcode: 0x60 - 0x7F]}{19}{subsubsection.7.3.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-C}6}Group 6: System Instructions [Opcode: 0xF0 - 0xFF]}{19}{table.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Implementation Details: Math Library \& BF16}{19}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-D}1}Packed BF16 Emulation (SIMD2)}{19}{subsubsection.7.4.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {5}Firmware Logic for Packed BF16 Addition}{19}{lstlisting.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VII-D}2}SFU Transcendental Functions (Lookup Tables)}{19}{subsubsection.7.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-E}}Code Example: v2.0 Softmax Kernel}{19}{subsection.7.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6}Softmax Kernel: Exp(x) / Sum(Exp(x))}{19}{lstlisting.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XI}{\ignorespaces System Control Instructions}}{20}{table.11}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XII}{\ignorespaces Integer Arithmetic Instructions}}{20}{table.12}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XIII}{\ignorespaces AI \& Data Conversion Instructions}}{20}{table.13}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XIV}{\ignorespaces Floating Point \& SFU Instructions}}{20}{table.14}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XV}{\ignorespaces Memory Operations}}{20}{table.15}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XVI}{\ignorespaces System Instructions}}{21}{table.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-F}}SIMT Execution Model Summary}{21}{subsection.7.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Micro-CUDA ISA v2.0 Extensions}{21}{section.8}\protected@file@percent }
+\newlabel{sec:isa_v2}{{VIII}{21}{Micro-CUDA ISA v2.0 Extensions}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Core Architecture Shifts}{21}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-A}1}Native Data Type Expansion (BFloat16)}{21}{subsubsection.8.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-A}2}SIMD2 Packed Execution Model}{21}{subsubsection.8.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}New Instruction Groups}{21}{subsection.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-B}1}Group 1: Type Conversion}{21}{subsubsection.8.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-B}2}Group 2: BF16 SIMD Arithmetic}{21}{subsubsection.8.2.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XVII}{\ignorespaces ISA v2.0 Type Conversion Instructions}}{21}{table.17}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XVIII}{\ignorespaces ISA v2.0 Packed Arithmetic Instructions}}{21}{table.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-B}3}Group 3: Special Function Unit (SFU)}{21}{subsubsection.8.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-B}4}Group 4: Tensor Core Operations}{21}{subsubsection.8.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Firmware Implementation Details}{21}{subsection.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-C}1}Fast Exp/Log Strategy}{21}{subsubsection.8.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-C}2}Fast RSQRT}{21}{subsubsection.8.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XIX}{\ignorespaces ISA v2.0 SFU Instructions}}{21}{table.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-C}3}RoPE SIN/COS LUT}{22}{subsubsection.8.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-D}}Micro-Kernel Examples}{22}{subsection.8.4}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {7}Softmax Implementation with ISA v2.0}{22}{lstlisting.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-D}1}Softmax (SFU.EXP2 + REDUX)}{22}{lstlisting.7}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8}RoPE Implementation}{22}{lstlisting.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VIII-D}2}RoPE (Rotary Embedding)}{22}{lstlisting.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-E}}Practical Example: Transformer Self-Attention}{22}{subsection.8.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {9}Transformer Self-Attention Implementation (ISA v2.0)}{22}{lstlisting.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-F}}System Impact Analysis}{23}{subsection.8.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Application Binary Interface (ABI)}{23}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Register Usage Convention}{23}{subsection.9.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XX}{\ignorespaces Micro-CUDA Register Convention}}{23}{table.20}\protected@file@percent }
+\newlabel{tab:reg_convention}{{XX}{23}{Micro-CUDA Register Convention}{table.20}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Stack Frame Layout}{23}{subsection.9.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {22}{\ignorespaces Activation Record (Stack Frame) Structure. The stack grows downwards in the private SRAM memory space of each core.}}{23}{figure.22}\protected@file@percent }
+\newlabel{fig:stack_frame}{{22}{23}{Activation Record (Stack Frame) Structure. The stack grows downwards in the private SRAM memory space of each core}{figure.22}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Exception Handling Model}{23}{subsection.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Memory Organization}{23}{subsection.9.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXI}{\ignorespaces System Address Map}}{23}{table.21}\protected@file@percent }
+\newlabel{tab:memory_map}{{XXI}{23}{System Address Map}{table.21}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IX-D}1}Special Function Registers (SFR)}{23}{subsubsection.9.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {X}Micro-CUDA Compiler (\texttt  {ucuda-cc})}{23}{section.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-A}}Compiler Architecture}{23}{subsection.10.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {23}{\ignorespaces Micro-CUDA Compiler Workflow: Leveraging Clang/LLVM for robust code generation.}}{24}{figure.23}\protected@file@percent }
+\newlabel{fig:compiler_arch}{{23}{24}{Micro-CUDA Compiler Workflow: Leveraging Clang/LLVM for robust code generation}{figure.23}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Instruction Selection \& Mapping}{24}{subsection.10.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-C}}Implementation: Regex-Based Frontend}{24}{subsection.10.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {10}IR Parsing Logic (mcc.py)}{24}{lstlisting.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-D}}Register Allocation Strategy}{24}{subsection.10.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-E}}Integration with Host CLI}{24}{subsection.10.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-F}}Usage \& API Reference}{24}{subsection.10.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {X-F}1}Command-Line Interface}{24}{subsubsection.10.6.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {11}Compiling a kernel from the CLI}{24}{lstlisting.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {X-F}2}Python Dynamic API}{25}{subsubsection.10.6.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {12}Dynamic Compilation API}{25}{lstlisting.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {X-F}3}Target Configurations}{25}{subsubsection.10.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Host Interface and CLI}{25}{section.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XI-A}}Turbo Mode Configuration}{25}{subsection.11.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXII}{\ignorespaces Turbo Mode Parameters}}{25}{table.22}\protected@file@percent }
+\newlabel{tab:turbo_config}{{XXII}{25}{Turbo Mode Parameters}{table.22}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XI-B}}Communication Protocol}{25}{subsection.11.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-B}1}Host-to-Device DMA (\texttt  {dma\_h2d})}{25}{subsubsection.11.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-B}2}Kernel Loading (\texttt  {load\_imem})}{25}{subsubsection.11.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XI-C}}LZ4 Compression for Bandwidth Optimization}{25}{subsection.11.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-C}1}LZ4-Compressed Kernel Loading (\texttt  {load\_imem\_lz4})}{25}{subsubsection.11.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-C}2}LZ4-Compressed Data Transfer (\texttt  {dma\_h2d\_lz4})}{25}{subsubsection.11.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-C}3}Error Handling}{25}{subsubsection.11.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-C}4}Performance Benefits}{25}{subsubsection.11.3.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXIII}{\ignorespaces LZ4 Error Codes}}{26}{table.23}\protected@file@percent }
+\newlabel{tab:lz4_errors}{{XXIII}{26}{LZ4 Error Codes}{table.23}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XI-D}}CLI Command Set}{26}{subsection.11.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXIV}{\ignorespaces CLI Command Reference}}{26}{table.24}\protected@file@percent }
+\newlabel{tab:cli_commands}{{XXIV}{26}{CLI Command Reference}{table.24}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XI-E}}Software Stack \& Programming Model}{26}{subsection.11.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-E}1}Micro-CUDA Compiler (ucuda-cc)}{26}{subsubsection.11.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XI-E}2}PyCUDA-Lite API}{26}{subsubsection.11.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XII}Profiling and Debugging}{26}{section.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XII-A}}Enhanced Trace Format}{26}{subsection.12.1}\protected@file@percent }
+\newlabel{lst:json_trace}{{13}{26}{Example JSON Trace Record}{lstlisting.13}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {13}Example JSON Trace Record}{26}{lstlisting.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XII-B}}Key Features}{26}{subsection.12.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XII-B}1}Hardware Context}{26}{subsubsection.12.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XII-B}2}Performance Metrics}{26}{subsubsection.12.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XII-B}3}Register Inspection}{26}{subsubsection.12.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XII-C}}Trace Usage}{27}{subsection.12.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XII-D}}Host-Side Visualization}{27}{subsection.12.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XII-D}1}Warp Divergence Analysis}{27}{subsubsection.12.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XII-D}2}Pipeline Stall Visualization}{27}{subsubsection.12.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XIII}Performance Benchmarks}{27}{section.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XIII-A}}Micro-CUDA vs. CMSIS-NN}{27}{subsection.13.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {24}{\ignorespaces Benchmark: INT8 Matrix Multiplication ($32 \times 32$). The 4-core split-bus topology achieves a 3.8x speedup over the single-core CMSIS-NN baseline.}}{27}{figure.24}\protected@file@percent }
+\newlabel{fig:benchmark_cmsis}{{24}{27}{Benchmark: INT8 Matrix Multiplication ($32 \times 32$). The 4-core split-bus topology achieves a 3.8x speedup over the single-core CMSIS-NN baseline}{figure.24}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XIII-B}}Power Consumption Profile}{27}{subsection.13.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXV}{\ignorespaces System Power Consumption (Measured)}}{27}{table.25}\protected@file@percent }
+\newlabel{tab:power_profile}{{XXV}{27}{System Power Consumption (Measured)}{table.25}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {XIV}Case Study: Parallel Attention}{27}{section.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XIV-A}}Setup}{27}{subsection.14.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XIV-B}}Micro-CUDA Assembly Code}{27}{subsection.14.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XIV-C}}Execution Trace Analysis}{27}{subsection.14.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {25}{\ignorespaces SIMT Memory Access Pattern. The \texttt  {LDL} instruction automatically distributes data across lanes.}}{28}{figure.25}\protected@file@percent }
+\newlabel{fig:simt}{{25}{28}{SIMT Memory Access Pattern. The \texttt {LDL} instruction automatically distributes data across lanes}{figure.25}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XIV-D}}Extended Benchmark Suite}{28}{subsection.14.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XIV-D}1}SGEMM (Matrix Multiplication)}{28}{subsubsection.14.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {XIV-D}2}Parallel Reduction}{28}{subsubsection.14.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XV}Electrical Specifications}{28}{section.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XV-A}}Absolute Maximum Ratings}{28}{subsection.15.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXVI}{\ignorespaces Absolute Maximum Ratings}}{28}{table.26}\protected@file@percent }
+\newlabel{tab:abs_ratings}{{XXVI}{28}{Absolute Maximum Ratings}{table.26}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XV-B}}Characteristics}{28}{subsection.15.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {XXVII}{\ignorespaces DC Electrical Characteristics}}{28}{table.27}\protected@file@percent }
+\newlabel{tab:dc_chars}{{XXVII}{28}{DC Electrical Characteristics}{table.27}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XV-C}}AC Timing Analysis}{28}{subsection.15.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {26}{\ignorespaces AC Timing Diagram for Global G-BUS. The setup time ($t_{su}$) allows for propagation delay across the 10cm bus trace.}}{28}{figure.26}\protected@file@percent }
+\newlabel{fig:ac_timing}{{26}{28}{AC Timing Diagram for Global G-BUS. The setup time ($t_{su}$) allows for propagation delay across the 10cm bus trace}{figure.26}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {XVI}Conclusion \& Future Work}{28}{section.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XVI-A}}Project Achievements}{28}{subsection.16.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {XVI-B}}Future Roadmap}{28}{subsection.16.2}\protected@file@percent }
+\bibcite{b1}{1}
+\bibcite{b2}{2}
+\bibcite{b3}{3}
+\@writefile{toc}{\contentsline {section}{References}{29}{section*.4}\protected@file@percent }
+\gdef \@abspage@last{29}

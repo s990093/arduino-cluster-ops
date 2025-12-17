@@ -209,7 +209,7 @@ Figure \ref{fig:rp2040_simt_arch} illustrates the complete microarchitecture of 
 \draw [line width=1.0pt, draw=lineColor] (sfu.south) -- (sfu.south |- collect_y);
 
 % Horizontal collection bus
-\draw [wire, -{Latex[length=0mm]}] ($(alu_int.south |- collect_y) + (-0.5,0)$) -- ($(sfu.south |- collect_y) + (0.5,0)$);
+\draw [wire] ($(alu_int.south |- collect_y) + (-0.5,0)$) -- ($(sfu.south |- collect_y) + (0.5,0)$);
 % Center arrow down to LSU
 \draw [wire] ($(alu_bf16.south |- collect_y)$) -- (lsu.north);
 
@@ -513,3 +513,229 @@ The Micro-CUDA implementation guarantees the following execution characteristics
     \item \textbf{Independent Registers:} Changes to R/F registers in one lane do not affect others
     \item \textbf{Shared VRAM:} All lanes share a unified 32-bit address space for inter-lane communication
 \end{itemize}
+
+\section{Micro-CUDA ISA v2.0 Extensions}
+\label{sec:isa_v2}
+
+This section details the "Deep Learning Native" v2.0 specification, designed to address the lack of Math libraries and modern AI data types in the initial implementation. This upgrade enables the ESP32+RP2040 cluster to effectively execute Transformer, RoPE, and Softmax operators.
+
+\subsection{Core Architecture Shifts}
+\subsubsection{Native Data Type Expansion (BFloat16)}
+Version 2.0 introduces \textbf{BFloat16 (BF16)} as a first-class citizen.
+\begin{itemize}
+    \item \textbf{Rationale}: BF16 shares the same 8-bit exponent as FP32, allowing conversion via simple truncation without complex bit-shifting or re-biasing. This is critical for the FPU-less Cortex-M0+ (RP2040).
+    \item \textbf{Format}: 1 Sign $|$ 8 Exponent $|$ 7 Mantissa (16-bit).
+\end{itemize}
+
+\subsubsection{SIMD2 Packed Execution Model}
+To maximize 32-bit register utilization, each general-purpose register (`Rx`) is treated as a vector containing two 16-bit BF16 values:
+\begin{itemize}
+    \item \textbf{R[n].L}: Low 16-bit (Element 0)
+    \item \textbf{R[n].H}: High 16-bit (Element 1)
+\end{itemize}
+This allows a single instruction to process two floating-point numbers simultaneously, effectively doubling the throughput.
+
+\subsection{New Instruction Groups}
+
+\subsubsection{Group 1: Type Conversion}
+Bridges the gap between INT8 quantization and FP32 accumulation.
+
+\begin{table}[htbp]
+\caption{ISA v2.0 Type Conversion Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Opcode} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Description} \\
+\hline
+0x20 & CVT.BF16.F32 & Rd, Ra & FP32 (Ra) $\to$ BF16 (Rd.L) (Truncate) \\
+0x21 & CVT.F32.BF16 & Rd, Ra & BF16 (Ra.L) $\to$ FP32 (Rd) (Zero-pad) \\
+0x22 & CVT.BF16.I8 & Rd, Ra & 2xINT8 (Ra) $\to$ 2xBF16 (Rd) \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Group 2: BF16 SIMD Arithmetic}
+Software emulation of packed BF16 operations.
+
+\begin{table}[htbp]
+\caption{ISA v2.0 Packed Arithmetic Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Op} & \textbf{Mnemonic} & \textbf{Operands} & \textbf{Operation (SIMD2)} \\
+\hline
+0x25 & BFADD2 & Rd, Ra, Rb & Rd.L/H = Ra.L/H + Rb.L/H \\
+0x26 & BFMUL2 & Rd, Ra, Rb & Rd.L/H = Ra.L/H * Rb.L/H \\
+0x27 & BFMA2 & Rd, Ra, Rb & Rd += Ra * Rb (Fused) \\
+0x28 & BFRELU2 & Rd, Ra & Rd = max(0, Ra) \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Group 3: Special Function Unit (SFU)}
+Implements high-precision LUT and Taylor series hybrid algorithms for transcendental functions.
+
+\begin{table}[htbp]
+\caption{ISA v2.0 SFU Instructions}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Op} & \textbf{Mnemonic} & \textbf{Func} & \textbf{Use Case} \\
+\hline
+0x50 & SFU.EXP2 & $2^x$ & Softmax (Numerator) \\
+0x51 & SFU.LOG2 & $\log_2(x)$ & Cross Entropy Loss \\
+0x52 & SFU.RSQRT & $1/\sqrt{x}$ & Attention Scaling \\
+0x53 & SFU.SIN & $\sin(\pi x)$ & RoPE \\
+0x54 & SFU.COS & $\cos(\pi x)$ & RoPE \\
+0x55 & SFU.TANH & $\tanh(x)$ & GeGLU / LSTM \\
+0x56 & SFU.GELU & GELU & Transformer FFN \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Group 4: Tensor Core Operations}
+\begin{itemize}
+    \item \textbf{BMMA.BF16 (0x45)}: Warp-Level Matrix Multiply ($D = A \times B + C$). Inputs A/B are BF16 vectors; C/D are FP32 accumulators. Optimizes mantissa multiplication using the Cortex-M0+ single-cycle 32x32 multiplier.
+\end{itemize}
+
+\subsection{Firmware Implementation Details}
+\subsubsection{Fast Exp/Log Strategy}
+Instead of computing $e^x$ directly, we calculate $2^x$ by manipulating the exponent field of the BF16 representation. A 3rd-order polynomial fits the mantissa, achieving $< 0.5\%$ error for Softmax.
+
+\subsubsection{Fast RSQRT}
+Adapted from the Quake III algorithm for BF16:
+\begin{lstlisting}[language=C++, basicstyle=\ttfamily\scriptsize]
+uint16_t fast_rsqrt_bf16(uint16_t number) {
+    long i;
+    // Magic number adjusted for BF16 bias
+    i = 0x5F3759DF - ( i >> 1 );
+    // ... Newton iteration ...
+    return result;
+}
+\end{lstlisting}
+
+\subsubsection{RoPE SIN/COS LUT}
+A 1024-entry BF16 SIN table (2KB) is stored in Flash (XIP). \texttt{SFU.SIN} performs linear interpolation on this table, providing $>10\times$ speedup over Taylor expansion.
+
+\subsection{Micro-Kernel Examples}
+
+\subsubsection{Softmax (SFU.EXP2 + REDUX)}
+\begin{lstlisting}[language=MicroCUDA, caption={Softmax Implementation with ISA v2.0}]
+; Step 1: Max Reduction
+L2R     R2, [R0]        ; Load vector
+REDUX.MAX R3, R2        ; Warp-wide Max
+
+; Step 2: Exp and Sum
+BSUB2   R4, R2, R3      ; x - max
+MUL     R4, R4, 1.44269 ; Convert to base 2
+SFU.EXP2 R5, R4         ; 2^(x-max)
+REDUX.ADD R6, R5        ; Accumulate sum
+
+; Step 3: Normalize
+SFU.RCP R7, R6          ; 1 / Sum
+BFMUL2  R8, R5, R7      ; Output
+STL     [R1], R8        ; Store
+\end{lstlisting}
+
+\subsubsection{RoPE (Rotary Embedding)}
+\begin{lstlisting}[language=MicroCUDA, caption={RoPE Implementation}]
+SFU.COS R2, R1          ; cos(theta)    
+SFU.SIN R3, R1          ; sin(theta)
+SHUF.SWAP R4, R0        ; R4 = [x2, x1]
+BFMUL2  R5, R0, R2      ; [x1*cos, x2*cos]
+BFMUL2  R6, R4, R3      ; [x2*sin, x1*sin]
+BFSUB.L R7, R5, R6      ; x1*cos - x2*sin
+BFADD.H R7, R5, R6      ; x2*cos + x1*sin
+STL     [R_OUT], R7
+\end{lstlisting}
+
+\subsection{Practical Example: Transformer Self-Attention}
+This comprehensive example demonstrates the complete data flow for computing $\text{Attention}(Q, K) = \text{Softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)$ using ISA v2.0 features.
+
+\textbf{Hardware Configuration:}
+\begin{itemize}
+    \item Warp Size: 8 Lanes (RP2040 cores 0-7)
+    \item Data Format: Packed BF16 (2 values per 32-bit register)
+    \item Memory Layout: Q, K, V stored as contiguous BF16 arrays in VRAM
+\end{itemize}
+
+\begin{lstlisting}[language=MicroCUDA, caption={Transformer Self-Attention Implementation (ISA v2.0)}]
+; ===================================================
+; Phase 1: Initialization & Lane Identity
+; ===================================================
+S2R     R31, SR_LANEID      ; R31 = My Lane ID (0..7)
+
+; Base addresses loaded via uniform broadcast from ESP32
+; R0 = Base_Q, R1 = Base_K, R2 = Scaling_Factor (1/sqrt(d))
+
+; ===================================================
+; Phase 2: SIMT Parallel Load (Packed BF16)
+; ===================================================
+; LDL performs lane-aware addressing:
+; Effective_Addr = Base + (LaneID * 4 bytes)
+; Each load fetches 32-bit = 2x BF16 values
+
+LDL     R10, [R0]           ; R10 = Q[2*lane, 2*lane+1]
+                            ; Lane 0: Q[0,1], Lane 7: Q[14,15]
+LDL     R11, [R1]           ; R11 = K[2*lane, 2*lane+1]
+
+; ===================================================
+; Phase 3: Attention Score Computation (Dot Product)
+; ===================================================
+; Packed multiplication: processes 2 elements per instruction
+BFMUL2  R12, R10, R11       ; R12.L = Q[2i]*K[2i]
+                            ; R12.H = Q[2i+1]*K[2i+1]
+
+; Note: Full dot product requires warp reduction (omitted here)
+; Assume R12 now contains partial score for this lane
+
+; ===================================================
+; Phase 4: Scaling (Division by sqrt(d_k))
+; ===================================================
+BFMUL2  R13, R12, R2        ; R13 = Score * (1/sqrt(d))
+
+; ===================================================
+; Phase 5: Softmax Numerator (SFU.EXP2)
+; ===================================================
+; Compute e^x using base-2 exponentiation
+; Formula: e^x = 2^(x * log2(e))
+
+MOV     R4, 0x3FB8          ; BF16 constant: log2(e) = 1.44269
+BFMUL2  R13, R13, R4        ; Convert to base 2
+SFU.EXP2 R14, R13           ; R14 = [2^Score_L, 2^Score_H]
+                            ; Uses Flash LUT + polynomial fitting
+
+; Note: Full Softmax requires sum reduction (omitted)
+
+; ===================================================
+; Phase 6: Scatter Store (Lane-Indexed Write)
+; ===================================================
+MOV     R5, 0x4000          ; Result base address
+SHL     R6, R31, 2          ; R6 = LaneID * 4 (byte offset)
+STX     [R5 + R6], R14      ; Store to Result[LaneID]
+
+EXIT
+\end{lstlisting}
+
+\textbf{Execution Flow Analysis:}
+\begin{enumerate}
+    \item \textbf{Grid Launch}: AMB82-Mini (Layer 1) initiates kernel dispatch.
+    \item \textbf{Instruction Broadcast}: ESP32-S3 (Layer 2) broadcasts \texttt{LDL R10, [R0]} to all 8 lanes via parallel bus.
+    \item \textbf{Lane Divergence}:
+    \begin{itemize}
+        \item Lane 0 (RP2040 \#0): Reads \texttt{SR\_LANEID=0}, fetches from address \texttt{R0 + 0}, loads \texttt{Q[0..1]}.
+        \item Lane 7 (RP2040 \#7): Reads \texttt{SR\_LANEID=7}, fetches from address \texttt{R0 + 28}, loads \texttt{Q[14..15]}.
+    \end{itemize}
+    \item \textbf{Synchronized Execution}: All lanes execute \texttt{SFU.EXP2} simultaneously using firmware LUT (stored in Flash XIP), achieving $>10\times$ speedup vs. Taylor series.
+    \item \textbf{Memory Coherence}: Scatter store (\texttt{STX}) ensures each lane writes to its designated slot without conflicts.
+\end{enumerate}
+
+\subsection{System Impact Analysis}
+\begin{enumerate}
+    \item \textbf{Memory Bandwidth}: SIMD2 effectively doubles the memory bandwidth for BF16 weights/activations, mitigating the 8-bit Global G-BUS bottleneck.
+    \item \textbf{I-Cache}: \texttt{SFU} instructions replace dozens of ALU instructions, significantly reducing kernel code size and I-Cache pressure.
+    \item \textbf{Compiler}: PyTorch \texttt{torch.bfloat16} can now map directly to the ISA without FP32 conversion overhead.
+\end{enumerate}

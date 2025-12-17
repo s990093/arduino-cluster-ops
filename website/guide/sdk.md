@@ -52,23 +52,53 @@ The `cli.py` tool provides direct access to these primitives.
 | `reg`           | `<lane_id>`    | Inspect Registers       |
 | `stats`         | -              | Show PC / VRAM Status   |
 
-## Python API Example
+## Python API Example (v2.0)
+
+The v2.0 `esp32_tools` provides a high-level `CUDARunner` for easy interaction.
+
+### 1. Quick Run (One-Liner)
 
 ```python
-# High-Level Usage
-from microcuda import Device, SourceModule
+from esp32_tools import quick_run, Instruction
 
-dev = Device(port="/dev/ttyUSB0")
-mod = SourceModule("kernel.cu")
+# Simple Kernel: R2 = R0 * R1
+program = [
+    Instruction.mov(0, 10),
+    Instruction.mov(1, 5),
+    Instruction.imul(2, 0, 1),    # R2 = 50
+    Instruction.exit_inst()
+]
 
-# Allocate memory on device
-a_gpu = dev.malloc(1024)
-b_gpu = dev.malloc(1024)
-
-# Copy data (H2D)
-dev.memcpy_htod(a_gpu, a_host)
-
-# Launch Kernel (Grid=1, Block=4)
-func = mod.get_function("vecAdd")
-func(a_gpu, b_gpu, block=(4,1,1))
+# Run and verify in one step
+quick_run(
+    port="/dev/ttyUSB0",
+    program=program,
+    expected={'R2': 50}
+)
 ```
+
+### 2. Advanced Runner (Context Manager)
+
+For complex debugging and trace analysis:
+
+```python
+from esp32_tools import CUDARunner, Instruction
+
+with CUDARunner("/dev/ttyUSB0") as runner:
+    runner.run(program, save_trace="debug_trace.json")
+
+    # Print formatted results
+    runner.print_results()
+
+    # Analyze execution trace
+    runner.print_trace_summary(max_lines=20)
+```
+
+## LZ4 Host Protocol
+
+The SDK automatically handles compression when `load_imem_lz4` is used.
+
+1.  **Compress**: `lz4.block.compress(data, store_size=False)`.
+2.  **Handshake**: Send `load_imem_lz4 <uncompressed_size>`.
+3.  **Transfer**: Send `[2-byte Block Size] + [Compressed Block]`.
+4.  **Finish**: Wait for `LZ4_LOAD_OK`.

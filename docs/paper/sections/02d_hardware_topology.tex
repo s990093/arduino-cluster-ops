@@ -1,6 +1,23 @@
 \section{Hardware Pipeline and Topology}
 
-This architecture implements a strict hardware-level pipeline, physically emulating the GPU execution model (Host $\to$ GigaThread Engine $\to$ SM $\to$ CUDA Cores). To achieve the high-speed throughput required for ``Memory Streaming'' and the Parallel Bus, the physical planning of GPIOs is critical. 
+This architecture implements a strict hardware-level pipeline, physically emulating the GPU execution model (Host $\to$ GigaThread Engine $\to$ SM $\to$ CUDA Cores). To achieve the high-speed throughput required for "Memory Streaming" and the Parallel Bus, the physical planning of GPIOs is critical.
+
+To formalize the control flow across the cluster hierarchy, we define three key algorithms, as summarized in Table \ref{tab:algo_summary}.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of Hardware Control Algorithms}
+\label{tab:algo_summary}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+\textbf{Alg} & \textbf{Name} & \textbf{Layer} & \textbf{Section} & \textbf{Core Concepts} \\ \hline
+1 & Warp Scheduler & Layer 2 (ESP32) & B. Streaming MP & Broadcast, Masking, Sync \\ \hline
+2 & Grid Dispatch & Layer 1 (AMB82) & A. Grid Master & Tiling, DMA Zero-Copy \\ \hline
+3 & SIMT Execution & Layer 3 (RP2040) & C. SMSP Cores & LaneID Offset, PIO Fetch \\ \hline
+\end{tabular}%
+}
+\end{table} 
 
 \subsection{Split-Bus Architecture}
 
@@ -33,6 +50,41 @@ G\_BUSY & IN & D12 & Flow Control (Wait State) \\ \hline
 }
 \end{table}
 
+\begin{algorithm*}
+\caption{Grid Dispatch \& DMA Injection (Running on AMB82-Mini)}
+\label{alg:grid_dispatch}
+\begin{algorithmic}[1]
+\small
+\REQUIRE $K_{config}$: Kernel Configuration (Dimensions, Opcode)
+\REQUIRE $T_{global}$: Global Tensor Data (Weights/Inputs) stored in DDR
+\ENSURE $G_{bus}$: Global G-BUS Data Stream (To ESP32)
+
+\STATE \textbf{Initialize} $DMA_{eng}$ with burst size 512 Bytes
+\STATE \textbf{Divide} $T_{global}$ into memory tiles $\{t_0, t_1, \dots, t_n\}$ fit for L2 SRAM
+
+\FORALL{tile $t_i$ in $T_{global}$}
+    \STATE \COMMENT{Step 1: Send Metadata Sideband}
+    \STATE \textbf{Push} $\text{Meta}(t_i)$ to Metadata Buffer (Shape, Precision)
+    \STATE $\text{SetSignal}(\text{MD\_Valid}, \text{High})$
+
+    \STATE \COMMENT{Step 2: Trigger Hardware Engine}
+    \WHILE{$\text{Signal}(\text{G\_BUSY}) == \text{High}$}
+        \STATE \textbf{Wait} \COMMENT{Flow control: Block until ESP32 Buffer is Free}
+    \ENDWHILE
+
+    \STATE \COMMENT{Zero-Copy Transfer using DMA as "Virtual Second Core"}
+    \STATE $DMA_{src} \leftarrow \text{Address}(t_i)$
+    \STATE $DMA_{dst} \leftarrow \text{G\_BUS\_PORT}$
+    \STATE $\text{DMA\_Start}()$ \COMMENT{Drives 8080 Bus \& WR\# signals automatically}
+
+    \STATE \textbf{Wait} for $DMA_{IRQ}$ (Transfer Complete)
+\ENDFOR
+
+\STATE \COMMENT{Step 3: Kernel Launch}
+\STATE $\text{SendPacket}(\text{CMD\_LAUNCH})$
+\end{algorithmic}
+\end{algorithm*}
+
 \subsubsection{Layer 2: ESP32-S3 (Streaming Multiprocessor)}
 The ESP32-S3 acts as a router with dual separated interfaces to support full-duplex pipelining. The input (Slave) pins are mapped to lower GPIOs for compatibility with the I2S0/Camera interface, while output (Master) pins are mapped to higher GPIOs to avoid strapping pins and Octal PSRAM conflicts.
 
@@ -58,6 +110,60 @@ SYNC\_TRIG & GPIO 46 & Global Barrier Sync \\ \hline
 }
 \end{table}
 
+\paragraph{Warp Scheduler Implementation}
+To ensure strictly synchronized execution across the distributed SIMD lanes, the ESP32 scheduler implements a deterministic fetch-decode-broadcast loop. Unlike traditional OS schedulers that assign threads to cores dynamically, our Warp Scheduler operates on a "Broadcast-and-Mask" principle. The formal logic is defined in \textbf{Algorithm \ref{alg:warp_sched}}.
+
+\begin{algorithm*}
+\caption{Micro-CUDA Warp Scheduler (Running on ESP32 Core 1)}
+\label{alg:warp_sched}
+\begin{algorithmic}[1]
+\small
+\REQUIRE $Q_{in}$: Instruction Batch Queue from Core 0
+\REQUIRE $M_{active}$: Active Lane Mask (Bitmask)
+\ENSURE $G_{bus}$: 8-bit Parallel Bus Signals
+
+\STATE \textbf{Initialize} $PC \leftarrow 0$, $M_{active} \leftarrow \text{0xFF}$
+
+\LOOP
+    \IF{$Q_{in}$ is empty}
+        \STATE Wait (Yield to FreeRTOS)
+        \STATE \textbf{continue}
+    \ENDIF
+
+    \STATE $I_{batch} \leftarrow \text{Pop}(Q_{in})$ \COMMENT{Fetch batch to hide latency}
+
+    \FORALL{$I_{current}$ in $I_{batch}$}
+        \STATE \COMMENT{Phase 1: Check Execution Mask}
+        \IF{$M_{active} == 0$}
+            \STATE \textbf{continue} \COMMENT{Skip if all threads inactive}
+        \ENDIF
+
+        \STATE \COMMENT{Phase 2: Instruction Dispatch (Broadcast)}
+        \STATE $\text{DriveBus}(G_{bus}, \text{Opcode}(I_{current}))$
+        \STATE $\text{DriveBus}(G_{bus}, \text{Operands}(I_{current}))$
+        \STATE $\text{PulseSignal}(\text{WR\#})$ \COMMENT{Trigger RP2040 PIO RX}
+
+        \STATE \COMMENT{Phase 3: Handling Divergence}
+        \IF{$\text{IsControlFlow}(I_{current})$}
+            \STATE $\text{SendSignal}(\text{SYNC\_REQ})$
+            \STATE $P_{feedback} \leftarrow \text{WaitFeedback}(Q_{feedback})$ \COMMENT{Block until RP2040s report}
+            
+            \IF{$\text{Opcode}(I_{current}) == \text{BR.Z}$}
+                \STATE $M_{active} \leftarrow \text{UpdateDivergenceMask}(M_{active}, P_{feedback})$
+                \IF{$\text{EvaluateBranch}(P_{feedback})$}
+                    \STATE $PC \leftarrow \text{TargetAddress}(I_{current})$
+                    \STATE Flush $I_{batch}$ \COMMENT{Discard remaining batch}
+                    \STATE \textbf{break}
+                \ENDIF
+            \ENDIF
+        \ELSE
+            \STATE $PC \leftarrow PC + 4$
+        \ENDIF
+    \ENDFOR
+\ENDLOOP
+\end{algorithmic}
+\end{algorithm*}
+
 \subsubsection{Layer 3: RP2040 (SMSP Cores)}
 The RP2040's Programmable I/O (PIO) requires strictly contiguous pins for efficient \texttt{IN PINS} instructions. All RP2040s share the Local G-BUS data lines but receive unique Chip Select signals.
 
@@ -70,13 +176,55 @@ The RP2040's Programmable I/O (PIO) requires strictly contiguous pins for effici
     \item \textbf{Sync}: GP11 (Wait/Barrier)
 \end{itemize}
 
+\begin{algorithm*}
+\caption{SIMT Execution \& Lane Addressing (Running on RP2040)}
+\label{alg:simt_exec}
+\begin{algorithmic}[1]
+\small
+\REQUIRE $FIFO_{rx}$: Instruction stream from PIO State Machine
+\REQUIRE $R_{file}$: Local Register File (R0-R31)
+\REQUIRE $SR_{lane}$: Hardwired Lane ID (0..7)
+\ENSURE $VRAM$: Local SRAM Bank
+\ENSURE $P_{out}$: Predicate Feedback (For Sync)
+
+\STATE \textbf{Start} PIO Program \texttt{parallel\_8080\_rx}
+
+\LOOP
+    \STATE \COMMENT{Step 1: Fetch (Blocking)}
+    \WHILE{$FIFO_{rx}$ is empty}
+        \STATE \textbf{Wait} \COMMENT{Cycle-accurate stall}
+    \ENDWHILE
+    \STATE $I_{inst} \leftarrow \text{Pop}(FIFO_{rx})$
+
+    \STATE \COMMENT{Step 2: Decode \& Address Calculation}
+    \STATE $Op \leftarrow \text{Opcode}(I_{inst})$
+
+    \IF{$Op == \text{LDL}$ (Lane-Aware Load)}
+        \STATE $Base \leftarrow R_{file}[\text{Src1}]$
+        \STATE $Offset \leftarrow SR_{lane} \times 4$
+        \STATE $Addr \leftarrow Base + Offset$ \COMMENT{Unique address per lane}
+        \STATE $R_{file}[\text{Dest}] \leftarrow VRAM[Addr]$
+
+    \ELSIF{$Op == \text{BFADD2}$ (Packed BF16)}
+        \STATE \COMMENT{SIMD2 Emulation on Cortex-M0+}
+        \STATE $R_{file}[\text{Dest}].L \leftarrow \text{SoftBF16Add}(R_{file}[\text{Src1}].L, \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \newline \quad \quad \quad \quad \quad \quad \quad \quad \quad R_{file}[\text{Src2}].L)$
+        \STATE $R_{file}[\text{Dest}].H \leftarrow \text{SoftBF16Add}(R_{file}[\text{Src1}].H, \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad \newline \quad \quad \quad \quad \quad \quad \quad \quad \quad R_{file}[\text{Src2}].H)$
+
+    \ELSIF{$Op == \text{BR.Z}$ (Branch Sync)}
+        \STATE $Val \leftarrow \text{CheckPredicate}(P0)$
+        \STATE $\text{GPIO\_Write}(P_{out}, Val)$ \COMMENT{Feedback to ESP32}
+    \ENDIF
+\ENDLOOP
+\end{algorithmic}
+\end{algorithm*}
+
 \subsection{System Corner Diagram}
 The following ``Corner Diagrams'' illustrate the hardware pipeline topology, emphasizing the flow of data, control signals, and the fan-out structure from Host to Threads.
 
 \subsubsection{High-Level Data Flow}
-\begin{figure}[htbp]
+\begin{figure*}[htbp]
 \centering
-\resizebox{0.8\columnwidth}{!}{%
+\resizebox{0.7\textwidth}{!}{%
 \begin{tikzpicture}[
     node distance=1.5cm,
     box/.style={draw, rounded corners, align=center, fill=white, drop shadow, font=\sffamily\small},
@@ -112,14 +260,14 @@ The following ``Corner Diagrams'' illustrate the hardware pipeline topology, emp
 }
 \caption{High-Level Data Flow Pipeline. The architecture supports simultaneous data ingestion from the AMB82-Mini while broadcasting to downstream cores.}
 \label{fig:high_level_pipeline}
-\end{figure}
+\end{figure*}
 
 \subsubsection{SMSP Fan-out View}
 This view corresponds to the GPU hierarchy: ESP32-S3 (GigaThread Engine) distributing work to multiple RP2040s (SMs/SMSPs).
 
-\begin{figure}[htbp]
+\begin{figure*}[htbp]
 \centering
-\resizebox{\columnwidth}{!}{%
+\resizebox{0.8\textwidth}{!}{%
 \begin{tikzpicture}[
     node distance=1.0cm,
     box/.style={draw, rounded corners, align=center, fill=white, drop shadow, font=\sffamily\scriptsize},
@@ -168,7 +316,7 @@ This view corresponds to the GPU hierarchy: ESP32-S3 (GigaThread Engine) distrib
 }
 \caption{SMSP Fan-out View. The ESP32-S3 acts as the GigaThread Engine, distributing blocks to parallel RP2040 units via dedicated Chip Selects and a shared Data Bus.}
 \label{fig:smsp_fanout}
-\end{figure}
+\end{figure*}
 
 \subsection{Physical Implementation Notes}
 To ensure stability of the parallel bus:
@@ -253,6 +401,8 @@ The system achieves a ``Fully Overlapped Pipeline'' through double-buffering at 
 \caption{Cycle-Level Pipeline Timing. During cycles C3--C5, the system effectively overlaps High-Level Data Injection (AMB82), Mid-Level Broadcasting (ESP32), and Low-Level Computation (RP2040).}
 \label{fig:pipeline_timing}
 \end{figure*}
+
+
 
 \subsection{Execution Model Mapping}
 

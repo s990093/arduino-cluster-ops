@@ -31,10 +31,7 @@ export default defineConfig({
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: 'Architecture Reference', link: '/guide/architecture' },
-            { text: 'Hardware & Topology', link: '/guide/hardware' },
-            { text: 'Software Internals', link: '/guide/software' },
             { text: 'ISA Specification', link: '/guide/isa' },
-            { text: 'SIMD Lanes', link: '/guide/simd-lanes' },
             { text: 'Python SDK', link: '/guide/sdk' },
             { text: 'Benchmarks', link: '/guide/benchmarks' }
           ]

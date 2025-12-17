@@ -11,6 +11,10 @@ The system implements a three-layer distributed architecture:
 2.  **Layer 2 (SM / Scheduler): ESP32-S3** - Warp Scheduler & Instruction Dispatch.
 3.  **Layer 3 (Lane / Core): RP2040** - Arithmetic Execution Lane.
 
+### Lane Execution Model
+
+The engine emulates **8 lanes** (Thread IDs 0-7). When a warp is scheduled, all 8 lanes execute the instruction in a loop (unrolled for performance).
+
 ## Data Types
 
 To enable efficient AI inference on the FPU-less RP2040, v2.0 introduces **Packed BF16**.
@@ -23,13 +27,34 @@ To enable efficient AI inference on the FPU-less RP2040, v2.0 introduces **Packe
 | **Packed BF16** | 32-bit    | 2× BF16  | **[v2.0]** High: Elem 1, Low: Elem 0 |
 | **INT8**        | 8-bit     | Signed   | [v1.5] Quantized operations          |
 
+## Memory Model
+
+### VRAM Organization
+
+The ESP32-S3 allocates a 100KB static array as Virtual VRAM.
+
+| Address Range       | Description                 |
+| :------------------ | :-------------------------- |
+| **0x0000 - 0x0FFF** | Program Text (Instructions) |
+| **0x1000 - 0x3FFF** | Global Data                 |
+| **0x4000 - 0xDFFF** | Heap / Stack areas          |
+
+### Memory Access Patterns
+
+- **LDG/STG (Broadcast)**: Scalar access. Same address for all lanes.
+- **LDL/STL (Strided)**: Vector access. `Address = Base + (LaneID * 4)`.
+- **LDX/STX (Gather/Scatter)**: Indirect access. `Address = Base + Offset[LaneID]`.
+- **LDS/STS (Shared)**: Fast scratchpad access.
+
 ## Register File
 
 Each Lane (RP2040) independently maintains:
 
 - **R0 - R31**: 32× 32-bit General Purpose Registers.
 - **P0 - P7**: 8× 1-bit Predicate Flags.
-- **SR**: System Registers (e.g., `SR_LANEID`).
+- **SR**: System Registers.
+  - `SR.LANEMASK`: Bitmask of active lanes (usually `0xFF`).
+  - `SR.LANEID`: Current lane ID (0-7).
 
 ## Instruction Encoding
 

@@ -1,0 +1,162 @@
+\contentsline {section}{\numberline {I}Introduction}{3}{section.1}%
+\contentsline {section}{\numberline {II}System Architecture}{3}{section.2}%
+\contentsline {subsection}{\numberline {\mbox {II-A}}Execution Model (SIMT)}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {\mbox {II-B}}Cluster Hierarchy}{3}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {\mbox {II-B}1}Layer 0: Host System (Grid)}{3}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {\mbox {II-B}2}Layer 1: GPU Master (AMB82-Mini)}{5}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {\mbox {II-B}3}Layer 2: Streaming Multiprocessors (ESP32-S3)}{5}{subsubsection.2.2.3}%
+\contentsline {subsubsection}{\numberline {\mbox {II-B}4}Layer 3: SMSP / Threads (RP2040)}{5}{subsubsection.2.2.4}%
+\contentsline {subsection}{\numberline {\mbox {II-C}}ESP32-S3 Micro-Architecture (Node Detail)}{5}{subsection.2.3}%
+\contentsline {subsection}{\numberline {\mbox {II-D}}Scalability and Multi-Chip Integration}{5}{subsection.2.4}%
+\contentsline {subsubsection}{\numberline {\mbox {II-D}1}Inter-Node Communication}{5}{subsubsection.2.4.1}%
+\contentsline {subsubsection}{\numberline {\mbox {II-D}2}Global Synchronization}{5}{subsubsection.2.4.2}%
+\contentsline {subsection}{\numberline {\mbox {II-E}}Layer 1 Detail: AMB82-Mini (Master Controller)}{5}{subsection.2.5}%
+\contentsline {subsection}{\numberline {\mbox {II-F}}Layer 2 Detail: ESP32-S3 as Streaming Multiprocessor}{5}{subsection.2.6}%
+\contentsline {subsection}{\numberline {\mbox {II-G}}Hardware Specifications}{7}{subsection.2.7}%
+\contentsline {subsubsection}{\numberline {\mbox {II-G}1}AMB82-Mini (GPU Grid Master)}{7}{subsubsection.2.7.1}%
+\contentsline {subsubsection}{\numberline {\mbox {II-G}2}Comparison: RP2040 vs. ESP32}{7}{subsubsection.2.7.2}%
+\contentsline {section}{\numberline {III}Hardware Pipeline and Topology}{7}{section.3}%
+\contentsline {subsection}{\numberline {\mbox {III-A}}Split-Bus Architecture}{7}{subsection.3.1}%
+\contentsline {subsection}{\numberline {\mbox {III-B}}Pin Mapping Strategy}{7}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {\mbox {III-B}1}Layer 1: AMB82-Mini (GPU Master)}{7}{subsubsection.3.2.1}%
+\contentsline {subsubsection}{\numberline {\mbox {III-B}2}Layer 2: ESP32-S3 (Streaming Multiprocessor)}{7}{subsubsection.3.2.2}%
+\contentsline {paragraph}{\numberline {\mbox {III-B}2a}Warp Scheduler Implementation}{7}{paragraph.3.2.2.1}%
+\contentsline {subsubsection}{\numberline {\mbox {III-B}3}Layer 3: RP2040 (SMSP Cores)}{7}{subsubsection.3.2.3}%
+\contentsline {subsection}{\numberline {\mbox {III-C}}System Corner Diagram}{9}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {\mbox {III-C}1}High-Level Data Flow}{9}{figure.6}%
+\contentsline {subsubsection}{\numberline {\mbox {III-C}2}SMSP Fan-out View}{9}{subsubsection.3.3.2}%
+\contentsline {subsection}{\numberline {\mbox {III-D}}Physical Implementation Notes}{9}{subsection.3.4}%
+\contentsline {subsection}{\numberline {\mbox {III-E}}Pipeline Timing Analysis}{9}{subsection.3.5}%
+\contentsline {subsection}{\numberline {\mbox {III-F}}Execution Model Mapping}{11}{subsection.3.6}%
+\contentsline {subsubsection}{\numberline {\mbox {III-F}1}Hardware Component Mapping}{11}{subsubsection.3.6.1}%
+\contentsline {subsection}{\numberline {\mbox {III-G}}Kernel Launch Flow}{11}{subsection.3.7}%
+\contentsline {section}{\numberline {IV}Implementation Details}{11}{section.4}%
+\contentsline {subsection}{\numberline {\mbox {IV-A}}VRAM Organization}{11}{subsection.4.1}%
+\contentsline {subsection}{\numberline {\mbox {IV-B}}Firmware Implementation}{11}{subsection.4.2}%
+\contentsline {subsection}{\numberline {\mbox {IV-C}}System Configuration}{12}{subsection.4.3}%
+\contentsline {subsection}{\numberline {\mbox {IV-D}}SIMD Engine Implementation (\texttt {vm\_simd\_v15.cpp})}{12}{subsection.4.4}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-D}1}Architecture: Structure-of-Arrays (SoA) Layout}{12}{figure.11}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-D}2}Computed Goto Dispatch}{13}{subsubsection.4.4.2}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-D}3}ASM-Optimized Warp Operations}{13}{subsubsection.4.4.3}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-D}4}Memory Access Patterns}{14}{figure.14}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-D}5}Fast Math Approximations}{14}{figure.15}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-D}6}Performance Characteristics}{14}{figure.16}%
+\contentsline {subsection}{\numberline {\mbox {IV-E}}System Reliability and Fault Tolerance}{14}{subsection.4.5}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-E}1}Failure Recovery}{14}{subsubsection.4.5.1}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-E}2}DMA Integrity}{14}{subsubsection.4.5.2}%
+\contentsline {subsection}{\numberline {\mbox {IV-F}}Power and Thermal Considerations}{14}{subsection.4.6}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-F}1}Power Distribution}{14}{subsubsection.4.6.1}%
+\contentsline {subsubsection}{\numberline {\mbox {IV-F}2}Thermal Management}{14}{subsubsection.4.6.2}%
+\contentsline {subsection}{\numberline {\mbox {IV-G}}Memory Safety and Sandbox}{14}{subsection.4.7}%
+\contentsline {section}{\numberline {V}Inter-Core Communication Protocol}{14}{section.5}%
+\contentsline {subsection}{\numberline {\mbox {V-A}}Communication Mechanism}{14}{subsection.5.1}%
+\contentsline {subsection}{\numberline {\mbox {V-B}}Instruction Batching}{15}{subsection.5.2}%
+\contentsline {subsection}{\numberline {\mbox {V-C}}Synchronization Sequence}{15}{subsection.5.3}%
+\contentsline {subsubsection}{\numberline {\mbox {V-C}1}Handling Divergence}{15}{subsubsection.5.3.1}%
+\contentsline {section}{\numberline {VI}Physical Bus Interface Specification}{15}{section.6}%
+\contentsline {subsection}{\numberline {\mbox {VI-A}}Interface Overview}{15}{subsection.6.1}%
+\contentsline {subsection}{\numberline {\mbox {VI-B}}Physical Layer Pinout}{15}{subsection.6.2}%
+\contentsline {subsection}{\numberline {\mbox {VI-C}}Word Transmission Protocol}{15}{subsection.6.3}%
+\contentsline {subsubsection}{\numberline {\mbox {VI-C}1}Byte Ordering (Endianness)}{15}{subsubsection.6.3.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VI-C}2}Burst Transmission Mode}{16}{subsubsection.6.3.2}%
+\contentsline {subsection}{\numberline {\mbox {VI-D}}Timing Characteristics}{16}{subsection.6.4}%
+\contentsline {subsection}{\numberline {\mbox {VI-E}}Instruction Dispatch Sequence}{16}{subsection.6.5}%
+\contentsline {subsection}{\numberline {\mbox {VI-F}}Hardware Implementation Notes}{16}{subsection.6.6}%
+\contentsline {subsubsection}{\numberline {\mbox {VI-F}1}RP2040 Reception (PIO State Machine)}{16}{subsubsection.6.6.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VI-F}2}Signal Integrity Considerations}{16}{subsubsection.6.6.2}%
+\contentsline {subsection}{\numberline {\mbox {VI-G}}Performance Analysis}{16}{subsection.6.7}%
+\contentsline {section}{\numberline {VII}Micro-CUDA ISA Specification}{16}{section.7}%
+\contentsline {subsection}{\numberline {\mbox {VII-A}}Execution Model \& Architecture Definition}{16}{subsection.7.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-A}1}Hardware Layer Mapping (Physical Mapping)}{16}{subsubsection.7.1.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-A}2}Data Types}{16}{subsubsection.7.1.2}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-A}3}Register File}{17}{subsubsection.7.1.3}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-A}4}Single-Lane Architecture Overview}{17}{subsubsection.7.1.4}%
+\contentsline {subsection}{\numberline {\mbox {VII-B}}Instruction Encoding Format}{17}{subsection.7.2}%
+\contentsline {subsection}{\numberline {\mbox {VII-C}}Complete Instruction Set}{19}{subsection.7.3}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-C}1}Group 1: System Control (Control \& Flow) [Opcode: 0x00 - 0x0F]}{19}{subsubsection.7.3.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-C}2}Group 2: Integer Arithmetic (Integer ALU) [Opcode: 0x10 - 0x1F]}{19}{subsubsection.7.3.2}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-C}3}Group 3: Deep Learning \& Data Conversion (AI \& Conversion) [Opcode: 0x20 - 0x2F]}{19}{subsubsection.7.3.3}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-C}4}Group 4: Floating Point \& Transcendental Functions (FP32 \& SFU) [Opcode: 0x30 - 0x5F]}{19}{subsubsection.7.3.4}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-C}5}Group 5: Memory Operations [Opcode: 0x60 - 0x7F]}{19}{subsubsection.7.3.5}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-C}6}Group 6: System Instructions [Opcode: 0xF0 - 0xFF]}{19}{table.16}%
+\contentsline {subsection}{\numberline {\mbox {VII-D}}Implementation Details: Math Library \& BF16}{19}{subsection.7.4}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-D}1}Packed BF16 Emulation (SIMD2)}{19}{subsubsection.7.4.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VII-D}2}SFU Transcendental Functions (Lookup Tables)}{19}{subsubsection.7.4.2}%
+\contentsline {subsection}{\numberline {\mbox {VII-E}}Code Example: v2.0 Softmax Kernel}{19}{subsection.7.5}%
+\contentsline {subsection}{\numberline {\mbox {VII-F}}SIMT Execution Model Summary}{21}{subsection.7.6}%
+\contentsline {section}{\numberline {VIII}Micro-CUDA ISA v2.0 Extensions}{21}{section.8}%
+\contentsline {subsection}{\numberline {\mbox {VIII-A}}Core Architecture Shifts}{21}{subsection.8.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-A}1}Native Data Type Expansion (BFloat16)}{21}{subsubsection.8.1.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-A}2}SIMD2 Packed Execution Model}{21}{subsubsection.8.1.2}%
+\contentsline {subsection}{\numberline {\mbox {VIII-B}}New Instruction Groups}{21}{subsection.8.2}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-B}1}Group 1: Type Conversion}{21}{subsubsection.8.2.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-B}2}Group 2: BF16 SIMD Arithmetic}{21}{subsubsection.8.2.2}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-B}3}Group 3: Special Function Unit (SFU)}{21}{subsubsection.8.2.3}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-B}4}Group 4: Tensor Core Operations}{21}{subsubsection.8.2.4}%
+\contentsline {subsection}{\numberline {\mbox {VIII-C}}Firmware Implementation Details}{21}{subsection.8.3}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-C}1}Fast Exp/Log Strategy}{21}{subsubsection.8.3.1}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-C}2}Fast RSQRT}{21}{subsubsection.8.3.2}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-C}3}RoPE SIN/COS LUT}{22}{subsubsection.8.3.3}%
+\contentsline {subsection}{\numberline {\mbox {VIII-D}}Micro-Kernel Examples}{22}{subsection.8.4}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-D}1}Softmax (SFU.EXP2 + REDUX)}{22}{lstlisting.7}%
+\contentsline {subsubsection}{\numberline {\mbox {VIII-D}2}RoPE (Rotary Embedding)}{22}{lstlisting.8}%
+\contentsline {subsection}{\numberline {\mbox {VIII-E}}Practical Example: Transformer Self-Attention}{22}{subsection.8.5}%
+\contentsline {subsection}{\numberline {\mbox {VIII-F}}System Impact Analysis}{23}{subsection.8.6}%
+\contentsline {section}{\numberline {IX}Application Binary Interface (ABI)}{23}{section.9}%
+\contentsline {subsection}{\numberline {\mbox {IX-A}}Register Usage Convention}{23}{subsection.9.1}%
+\contentsline {subsection}{\numberline {\mbox {IX-B}}Stack Frame Layout}{23}{subsection.9.2}%
+\contentsline {subsection}{\numberline {\mbox {IX-C}}Exception Handling Model}{23}{subsection.9.3}%
+\contentsline {subsection}{\numberline {\mbox {IX-D}}Memory Organization}{23}{subsection.9.4}%
+\contentsline {subsubsection}{\numberline {\mbox {IX-D}1}Special Function Registers (SFR)}{23}{subsubsection.9.4.1}%
+\contentsline {section}{\numberline {X}Micro-CUDA Compiler (\texttt {ucuda-cc})}{23}{section.10}%
+\contentsline {subsection}{\numberline {\mbox {X-A}}Compiler Architecture}{23}{subsection.10.1}%
+\contentsline {subsection}{\numberline {\mbox {X-B}}Instruction Selection \& Mapping}{24}{subsection.10.2}%
+\contentsline {subsection}{\numberline {\mbox {X-C}}Implementation: Regex-Based Frontend}{24}{subsection.10.3}%
+\contentsline {subsection}{\numberline {\mbox {X-D}}Register Allocation Strategy}{24}{subsection.10.4}%
+\contentsline {subsection}{\numberline {\mbox {X-E}}Integration with Host CLI}{24}{subsection.10.5}%
+\contentsline {subsection}{\numberline {\mbox {X-F}}Usage \& API Reference}{24}{subsection.10.6}%
+\contentsline {subsubsection}{\numberline {\mbox {X-F}1}Command-Line Interface}{24}{subsubsection.10.6.1}%
+\contentsline {subsubsection}{\numberline {\mbox {X-F}2}Python Dynamic API}{25}{subsubsection.10.6.2}%
+\contentsline {subsubsection}{\numberline {\mbox {X-F}3}Target Configurations}{25}{subsubsection.10.6.3}%
+\contentsline {section}{\numberline {XI}Host Interface and CLI}{25}{section.11}%
+\contentsline {subsection}{\numberline {\mbox {XI-A}}Turbo Mode Configuration}{25}{subsection.11.1}%
+\contentsline {subsection}{\numberline {\mbox {XI-B}}Communication Protocol}{25}{subsection.11.2}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-B}1}Host-to-Device DMA (\texttt {dma\_h2d})}{25}{subsubsection.11.2.1}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-B}2}Kernel Loading (\texttt {load\_imem})}{25}{subsubsection.11.2.2}%
+\contentsline {subsection}{\numberline {\mbox {XI-C}}LZ4 Compression for Bandwidth Optimization}{25}{subsection.11.3}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-C}1}LZ4-Compressed Kernel Loading (\texttt {load\_imem\_lz4})}{25}{subsubsection.11.3.1}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-C}2}LZ4-Compressed Data Transfer (\texttt {dma\_h2d\_lz4})}{25}{subsubsection.11.3.2}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-C}3}Error Handling}{25}{subsubsection.11.3.3}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-C}4}Performance Benefits}{25}{subsubsection.11.3.4}%
+\contentsline {subsection}{\numberline {\mbox {XI-D}}CLI Command Set}{26}{subsection.11.4}%
+\contentsline {subsection}{\numberline {\mbox {XI-E}}Software Stack \& Programming Model}{26}{subsection.11.5}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-E}1}Micro-CUDA Compiler (ucuda-cc)}{26}{subsubsection.11.5.1}%
+\contentsline {subsubsection}{\numberline {\mbox {XI-E}2}PyCUDA-Lite API}{26}{subsubsection.11.5.2}%
+\contentsline {section}{\numberline {XII}Profiling and Debugging}{26}{section.12}%
+\contentsline {subsection}{\numberline {\mbox {XII-A}}Enhanced Trace Format}{26}{subsection.12.1}%
+\contentsline {subsection}{\numberline {\mbox {XII-B}}Key Features}{26}{subsection.12.2}%
+\contentsline {subsubsection}{\numberline {\mbox {XII-B}1}Hardware Context}{26}{subsubsection.12.2.1}%
+\contentsline {subsubsection}{\numberline {\mbox {XII-B}2}Performance Metrics}{26}{subsubsection.12.2.2}%
+\contentsline {subsubsection}{\numberline {\mbox {XII-B}3}Register Inspection}{26}{subsubsection.12.2.3}%
+\contentsline {subsection}{\numberline {\mbox {XII-C}}Trace Usage}{27}{subsection.12.3}%
+\contentsline {subsection}{\numberline {\mbox {XII-D}}Host-Side Visualization}{27}{subsection.12.4}%
+\contentsline {subsubsection}{\numberline {\mbox {XII-D}1}Warp Divergence Analysis}{27}{subsubsection.12.4.1}%
+\contentsline {subsubsection}{\numberline {\mbox {XII-D}2}Pipeline Stall Visualization}{27}{subsubsection.12.4.2}%
+\contentsline {section}{\numberline {XIII}Performance Benchmarks}{27}{section.13}%
+\contentsline {subsection}{\numberline {\mbox {XIII-A}}Micro-CUDA vs. CMSIS-NN}{27}{subsection.13.1}%
+\contentsline {subsection}{\numberline {\mbox {XIII-B}}Power Consumption Profile}{27}{subsection.13.2}%
+\contentsline {section}{\numberline {XIV}Case Study: Parallel Attention}{27}{section.14}%
+\contentsline {subsection}{\numberline {\mbox {XIV-A}}Setup}{27}{subsection.14.1}%
+\contentsline {subsection}{\numberline {\mbox {XIV-B}}Micro-CUDA Assembly Code}{27}{subsection.14.2}%
+\contentsline {subsection}{\numberline {\mbox {XIV-C}}Execution Trace Analysis}{27}{subsection.14.3}%
+\contentsline {subsection}{\numberline {\mbox {XIV-D}}Extended Benchmark Suite}{28}{subsection.14.4}%
+\contentsline {subsubsection}{\numberline {\mbox {XIV-D}1}SGEMM (Matrix Multiplication)}{28}{subsubsection.14.4.1}%
+\contentsline {subsubsection}{\numberline {\mbox {XIV-D}2}Parallel Reduction}{28}{subsubsection.14.4.2}%
+\contentsline {section}{\numberline {XV}Electrical Specifications}{28}{section.15}%
+\contentsline {subsection}{\numberline {\mbox {XV-A}}Absolute Maximum Ratings}{28}{subsection.15.1}%
+\contentsline {subsection}{\numberline {\mbox {XV-B}}Characteristics}{28}{subsection.15.2}%
+\contentsline {subsection}{\numberline {\mbox {XV-C}}AC Timing Analysis}{28}{subsection.15.3}%
+\contentsline {section}{\numberline {XVI}Conclusion \& Future Work}{28}{section.16}%
+\contentsline {subsection}{\numberline {\mbox {XVI-A}}Project Achievements}{28}{subsection.16.1}%
+\contentsline {subsection}{\numberline {\mbox {XVI-B}}Future Roadmap}{28}{subsection.16.2}%
+\contentsline {section}{References}{29}{section*.4}%
